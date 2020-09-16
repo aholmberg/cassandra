@@ -1,4 +1,6 @@
 4.0-beta3
+ * Add byte array backed cells (CASSANDRA-15393)
+ * Correctly handle pending ranges with adjacent range movements (CASSANDRA-14801)
  * Avoid adding locahost when streaming trivial ranges (CASSANDRA-16099)
  * Add nodetool getfullquerylog (CASSANDRA-15988)
  * Fix yaml format and alignment in tpstats (CASSANDRA-11402)
