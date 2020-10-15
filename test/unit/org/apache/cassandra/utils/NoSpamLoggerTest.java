@@ -84,7 +84,7 @@ public class NoSpamLoggerTest
        NoSpamLogger.CLOCK = new NoSpamLogger.Clock()
        {
         @Override
-        public long nanoTime()
+        public long currentTimeMillis()
         {
             return now;
         }
@@ -113,25 +113,25 @@ public class NoSpamLoggerTest
        setUp();
        now = 5;
 
-       assertTrue(NoSpamLogger.log( mock, l, 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertTrue(NoSpamLogger.log( mock, l, 5,  TimeUnit.MILLISECONDS, statement, param));
 
        assertEquals(1, logged.get(l).size());
 
-       assertFalse(NoSpamLogger.log( mock, l, 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertFalse(NoSpamLogger.log( mock, l, 5,  TimeUnit.MILLISECONDS, statement, param));
 
        assertEquals(1, logged.get(l).size());
 
        now += 5;
 
-       assertTrue(NoSpamLogger.log( mock, l, 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertTrue(NoSpamLogger.log( mock, l, 5,  TimeUnit.MILLISECONDS, statement, param));
 
        assertEquals(2, logged.get(l).size());
 
-       assertTrue(NoSpamLogger.log( mock, l, "key", 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertTrue(NoSpamLogger.log( mock, l, "key", 5,  TimeUnit.MILLISECONDS, statement, param));
 
        assertEquals(3, logged.get(l).size());
 
-       assertFalse(NoSpamLogger.log( mock, l, "key", 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertFalse(NoSpamLogger.log( mock, l, "key", 5,  TimeUnit.MILLISECONDS, statement, param));
 
        assertEquals(3, logged.get(l).size());
    }
@@ -147,7 +147,7 @@ public class NoSpamLoggerTest
    public void testNoSpamLoggerDirect() throws Exception
    {
        now = 5;
-       NoSpamLogger logger = NoSpamLogger.getLogger( mock, 5, TimeUnit.NANOSECONDS);
+       NoSpamLogger logger = NoSpamLogger.getLogger( mock, 5, TimeUnit.MILLISECONDS);
 
        assertTrue(logger.info(statement, param));
        assertFalse(logger.info(statement, param));
@@ -156,21 +156,23 @@ public class NoSpamLoggerTest
 
        assertLoggedSizes(1, 0, 0);
 
-       NoSpamLogStatement statement = logger.getStatement("swizzle2{}", 10, TimeUnit.NANOSECONDS);
-       assertFalse(statement.warn(param));
-       //now is 5 so it won't log
-       assertLoggedSizes(1, 0, 0);
-
-       now = 10;
-       assertTrue(statement.warn(param));
+       NoSpamLogStatement statement = logger.getStatement("swizzle2{}", 10, TimeUnit.MILLISECONDS);
+       assertTrue(statement.warn(param)); // hasn't logged before
        assertLoggedSizes(1, 1, 0);
 
+       now = 10;
+       assertFalse(statement.warn(param)); // 10ns have not passed since first log at 5
+       assertLoggedSizes(1, 1, 0);
+
+       now = 15;
+       assertTrue(statement.warn(param)); // 10ns have passed
+       assertLoggedSizes(1, 2, 0);
    }
 
    @Test
    public void testNoSpamLoggerStatementDirect() throws Exception
    {
-       NoSpamLogger.NoSpamLogStatement nospam = NoSpamLogger.getStatement( mock, statement, 5, TimeUnit.NANOSECONDS);
+       NoSpamLogger.NoSpamLogStatement nospam = NoSpamLogger.getStatement( mock, statement, 5, TimeUnit.MILLISECONDS);
 
        now = 5;
 
@@ -201,22 +203,22 @@ public class NoSpamLoggerTest
    {
        now = 5;
 
-       assertTrue(NoSpamLogger.log( mock, Level.INFO, 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertTrue(NoSpamLogger.log( mock, Level.INFO, 5,  TimeUnit.MILLISECONDS, statement, param));
        checkMock(Level.INFO);
 
        now = 10;
 
-       assertTrue(NoSpamLogger.log( mock, Level.WARN, 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertTrue(NoSpamLogger.log( mock, Level.WARN, 5,  TimeUnit.MILLISECONDS, statement, param));
        checkMock(Level.WARN);
 
        now = 15;
 
-       assertTrue(NoSpamLogger.log( mock, Level.ERROR, 5,  TimeUnit.NANOSECONDS, statement, param));
+       assertTrue(NoSpamLogger.log( mock, Level.ERROR, 5,  TimeUnit.MILLISECONDS, statement, param));
        checkMock(Level.ERROR);
 
        now = 20;
 
-       NoSpamLogger logger = NoSpamLogger.getLogger(mock, 5, TimeUnit.NANOSECONDS);
+       NoSpamLogger logger = NoSpamLogger.getLogger(mock, 5, TimeUnit.MILLISECONDS);
 
        assertTrue(logger.info(statement, param));
        checkMock(Level.INFO);

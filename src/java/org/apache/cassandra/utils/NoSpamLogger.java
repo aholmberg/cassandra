@@ -50,15 +50,15 @@ public class NoSpamLogger
     @VisibleForTesting
     static interface Clock
     {
-        long nanoTime();
+        long currentTimeMillis();
     }
 
     @VisibleForTesting
     static Clock CLOCK = new Clock()
     {
-        public long nanoTime()
+        public long currentTimeMillis()
         {
-            return System.nanoTime();
+            return System.currentTimeMillis();
         }
     };
 
@@ -67,23 +67,25 @@ public class NoSpamLogger
         private static final long serialVersionUID = 1L;
 
         private final String statement;
-        private final long minIntervalNanos;
+        private final long minIntervalMillis;
+        private boolean hasLogged = false;
 
-        public NoSpamLogStatement(String statement, long minIntervalNanos)
+        public NoSpamLogStatement(String statement, long minIntervalMillis)
         {
             this.statement = statement;
-            this.minIntervalNanos = minIntervalNanos;
+            this.minIntervalMillis = minIntervalMillis;
         }
 
-        private boolean shouldLog(long nowNanos)
+        private boolean shouldLog(long nowMillis)
         {
             long expected = get();
-            return nowNanos - expected >= minIntervalNanos && compareAndSet(expected, nowNanos);
+            return (!hasLogged || nowMillis - expected >= minIntervalMillis)
+                   && compareAndSet(expected, nowMillis);
         }
 
-        public boolean log(Level l, long nowNanos, Object... objects)
+        public boolean log(Level l, long nowMillis, Object... objects)
         {
-            if (!shouldLog(nowNanos)) return false;
+            if (!shouldLog(nowMillis)) return false;
 
             switch (l)
             {
@@ -99,37 +101,38 @@ public class NoSpamLogger
                 default:
                     throw new AssertionError();
             }
+            hasLogged = true;
             return true;
         }
 
-        public boolean info(long nowNanos, Object... objects)
+        public boolean info(long nowMillis, Object... objects)
         {
-            return NoSpamLogStatement.this.log(Level.INFO, nowNanos, objects);
+            return NoSpamLogStatement.this.log(Level.INFO, nowMillis, objects);
         }
 
         public boolean info(Object... objects)
         {
-            return NoSpamLogStatement.this.info(CLOCK.nanoTime(), objects);
+            return NoSpamLogStatement.this.info(CLOCK.currentTimeMillis(), objects);
         }
 
-        public boolean warn(long nowNanos, Object... objects)
+        public boolean warn(long nowMillis, Object... objects)
         {
-            return NoSpamLogStatement.this.log(Level.WARN, nowNanos, objects);
+            return NoSpamLogStatement.this.log(Level.WARN, nowMillis, objects);
         }
 
         public boolean warn(Object... objects)
         {
-            return NoSpamLogStatement.this.warn(CLOCK.nanoTime(), objects);
+            return NoSpamLogStatement.this.warn(CLOCK.currentTimeMillis(), objects);
         }
 
-        public boolean error(long nowNanos, Object... objects)
+        public boolean error(long nowMillis, Object... objects)
         {
-            return NoSpamLogStatement.this.log(Level.ERROR, nowNanos, objects);
+            return NoSpamLogStatement.this.log(Level.ERROR, nowMillis, objects);
         }
 
         public boolean error(Object... objects)
         {
-            return NoSpamLogStatement.this.error(CLOCK.nanoTime(), objects);
+            return NoSpamLogStatement.this.error(CLOCK.currentTimeMillis(), objects);
         }
     }
 
@@ -156,19 +159,19 @@ public class NoSpamLogger
 
     public static boolean log(Logger logger, Level level, long minInterval, TimeUnit unit, String message, Object... objects)
     {
-        return log(logger, level, message, minInterval, unit, CLOCK.nanoTime(), message, objects);
+        return log(logger, level, message, minInterval, unit, CLOCK.currentTimeMillis(), message, objects);
     }
 
     public static boolean log(Logger logger, Level level, String key, long minInterval, TimeUnit unit, String message, Object... objects)
     {
-        return log(logger, level, key, minInterval, unit, CLOCK.nanoTime(), message, objects);
+        return log(logger, level, key, minInterval, unit, CLOCK.currentTimeMillis(), message, objects);
     }
 
-    public static boolean log(Logger logger, Level level, String key, long minInterval, TimeUnit unit, long nowNanos, String message, Object... objects)
+    public static boolean log(Logger logger, Level level, String key, long minInterval, TimeUnit unit, long nowMillis, String message, Object... objects)
     {
         NoSpamLogger wrapped = getLogger(logger, minInterval, unit);
         NoSpamLogStatement statement = wrapped.getStatement(key, message);
-        return statement.log(level, nowNanos, objects);
+        return statement.log(level, nowMillis, objects);
     }
 
     public static NoSpamLogStatement getStatement(Logger logger, String message, long minInterval, TimeUnit unit)
@@ -178,76 +181,76 @@ public class NoSpamLogger
     }
 
     private final Logger wrapped;
-    private final long minIntervalNanos;
+    private final long minIntervalMillis;
     private final NonBlockingHashMap<String, NoSpamLogStatement> lastMessage = new NonBlockingHashMap<>();
 
     private NoSpamLogger(Logger wrapped, long minInterval, TimeUnit timeUnit)
     {
         this.wrapped = wrapped;
-        minIntervalNanos = timeUnit.toNanos(minInterval);
+        minIntervalMillis = timeUnit.toMillis(minInterval);
     }
 
-    public boolean info(long nowNanos, String s, Object... objects)
+    public boolean info(long nowMillis, String s, Object... objects)
     {
-        return NoSpamLogger.this.log( Level.INFO, s, nowNanos, objects);
+        return NoSpamLogger.this.log( Level.INFO, s, nowMillis, objects);
     }
 
     public boolean info(String s, Object... objects)
     {
-        return NoSpamLogger.this.info(CLOCK.nanoTime(), s, objects);
+        return NoSpamLogger.this.info(CLOCK.currentTimeMillis(), s, objects);
     }
 
-    public boolean warn(long nowNanos, String s, Object... objects)
+    public boolean warn(long nowMillis, String s, Object... objects)
     {
-        return NoSpamLogger.this.log( Level.WARN, s, nowNanos, objects);
+        return NoSpamLogger.this.log( Level.WARN, s, nowMillis, objects);
     }
 
     public boolean warn(String s, Object... objects)
     {
-        return NoSpamLogger.this.warn(CLOCK.nanoTime(), s, objects);
+        return NoSpamLogger.this.warn(CLOCK.currentTimeMillis(), s, objects);
     }
 
-    public boolean error(long nowNanos, String s, Object... objects)
+    public boolean error(long nowMillis, String s, Object... objects)
     {
-        return NoSpamLogger.this.log( Level.ERROR, s, nowNanos, objects);
+        return NoSpamLogger.this.log( Level.ERROR, s, nowMillis, objects);
     }
 
     public boolean error(String s, Object... objects)
     {
-        return NoSpamLogger.this.error(CLOCK.nanoTime(), s, objects);
+        return NoSpamLogger.this.error(CLOCK.currentTimeMillis(), s, objects);
     }
 
-    public boolean log(Level l, String s, long nowNanos, Object... objects)
+    public boolean log(Level l, String s, long nowMillis, Object... objects)
     {
-        return NoSpamLogger.this.getStatement(s, minIntervalNanos).log(l, nowNanos, objects);
+        return NoSpamLogger.this.getStatement(s, minIntervalMillis).log(l, nowMillis, objects);
     }
 
     public NoSpamLogStatement getStatement(String s)
     {
-        return NoSpamLogger.this.getStatement(s, minIntervalNanos);
+        return NoSpamLogger.this.getStatement(s, minIntervalMillis);
     }
 
     public NoSpamLogStatement getStatement(String key, String s)
     {
-        return NoSpamLogger.this.getStatement(key, s, minIntervalNanos);
+        return NoSpamLogger.this.getStatement(key, s, minIntervalMillis);
     }
 
     public NoSpamLogStatement getStatement(String s, long minInterval, TimeUnit unit)
     {
-        return NoSpamLogger.this.getStatement(s, unit.toNanos(minInterval));
+        return NoSpamLogger.this.getStatement(s, unit.toMillis(minInterval));
     }
 
-    public NoSpamLogStatement getStatement(String s, long minIntervalNanos)
+    public NoSpamLogStatement getStatement(String s, long minIntervalMillis)
     {
-        return getStatement(s, s, minIntervalNanos);
+        return getStatement(s, s, minIntervalMillis);
     }
 
-    public NoSpamLogStatement getStatement(String key, String s, long minIntervalNanos)
+    public NoSpamLogStatement getStatement(String key, String s, long minIntervalMillis)
     {
         NoSpamLogStatement statement = lastMessage.get(key);
         if (statement == null)
         {
-            statement = new NoSpamLogStatement(s, minIntervalNanos);
+            statement = new NoSpamLogStatement(s, minIntervalMillis);
             NoSpamLogStatement temp = lastMessage.putIfAbsent(key, statement);
             if (temp != null)
                 statement = temp;
