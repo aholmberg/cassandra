@@ -99,9 +99,12 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
     public void awaitResults() throws ReadFailureException, ReadTimeoutException
     {
         boolean signaled = await(command.getTimeout(MILLISECONDS), TimeUnit.MILLISECONDS);
-        boolean failed = failures > 0 && blockFor + failures > replicaPlan().contacts().size();
+        boolean failed = failures > 0 && (blockFor > resolver.responses.size() || !resolver.isDataPresent());
         if (signaled && !failed)
+        {
+            assert resolver.isDataPresent();
             return;
+        }
 
         if (Tracing.isTracing())
         {

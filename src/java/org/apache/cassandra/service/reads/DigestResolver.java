@@ -109,7 +109,8 @@ public class DigestResolver<E extends Endpoints<E>, P extends ReplicaPlan.ForRea
         // validate digests against each other; return false immediately on mismatch.
         ByteBuffer digest = null;
         Collection<Message<ReadResponse>> snapshot = responses.snapshot();
-        if (snapshot.size() <= 1)
+        assert snapshot.size() > 0;
+        if (snapshot.size() == 1)
             return true;
 
         // TODO: should also not calculate if only one full node
