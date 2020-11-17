@@ -304,15 +304,18 @@ public abstract class AbstractReadExecutor
                     }
                 }
 
-                // we must update the plan to include this new node, else when we come to read-repair, we may not include this
-                // speculated response in the data requests we make again, and we will not be able to 'speculate' an extra repair read,
-                // nor would we be able to speculate a new 'write' if the repair writes are insufficient
-                super.replicaPlan.addToContacts(extraReplica);
+                if (handler.shouldSendSpecExec())
+                {
+                    // we must update the plan to include this new node, else when we come to read-repair, we may not include this
+                    // speculated response in the data requests we make again, and we will not be able to 'speculate' an extra repair read,
+                    // nor would we be able to speculate a new 'write' if the repair writes are insufficient
+                    super.replicaPlan.addToContacts(extraReplica);
 
-                if (traceState != null)
-                    traceState.trace("speculating read retry on {}", extraReplica);
-                logger.trace("speculating read retry on {}", extraReplica);
-                MessagingService.instance().sendWithCallback(retryCommand.createMessage(false), extraReplica.endpoint(), handler);
+                    if (traceState != null)
+                        traceState.trace("speculating read retry on {}", extraReplica);
+                    logger.trace("speculating read retry on {}", extraReplica);
+                    MessagingService.instance().sendWithCallback(retryCommand.createMessage(false), extraReplica.endpoint(), handler);
+                }
             }
         }
 
@@ -410,7 +413,8 @@ public abstract class AbstractReadExecutor
                 logger.trace("Timed out waiting on digest mismatch repair requests");
             // the caught exception here will have CL.ALL from the repair command,
             // not whatever CL the initial command was at (CASSANDRA-7947)
-            throw new ReadTimeoutException(replicaPlan().consistencyLevel(), handler.blockFor - 1, handler.blockFor, true);
+            int blockFor = replicaPlan.get().blockFor();
+            throw new ReadTimeoutException(replicaPlan().consistencyLevel(), blockFor - 1, blockFor, true);
         }
     }
 

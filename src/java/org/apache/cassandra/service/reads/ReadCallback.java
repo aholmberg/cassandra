@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
 
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.locator.ReplicaPlan;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,22 +46,21 @@ import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<E>> implements RequestCallback<ReadResponse>
 {
-    protected static final Logger logger = LoggerFactory.getLogger( ReadCallback.class );
+    protected static final Logger logger = LoggerFactory.getLogger(ReadCallback.class);
 
     public final ResponseResolver resolver;
     final SimpleCondition condition = new SimpleCondition();
     private final long queryStartNanoTime;
-    final int blockFor; // TODO: move to replica plan as well?
     // this uses a plain reference, but is initialised before handoff to any other threads; the later updates
     // may not be visible to the threads immediately, but ReplicaPlan only contains final fields, so they will never see an uninitialised object
     final ReplicaPlan.Shared<E, P> replicaPlan;
     private final ReadCommand command;
-    private static final AtomicIntegerFieldUpdater<ReadCallback> recievedUpdater
-            = AtomicIntegerFieldUpdater.newUpdater(ReadCallback.class, "received");
+
     private volatile int received = 0;
-    private static final AtomicIntegerFieldUpdater<ReadCallback> failuresUpdater
-            = AtomicIntegerFieldUpdater.newUpdater(ReadCallback.class, "failures");
-    private volatile int failures = 0;
+    private volatile int failed = 0;
+    private int expectedResponses;
+    private int requiredResponses;
+
     private final Map<InetAddressAndPort, RequestFailureReason> failureReasonByEndpoint;
 
     public ReadCallback(ResponseResolver resolver, ReadCommand command, ReplicaPlan.Shared<E, P> replicaPlan, long queryStartNanoTime)
@@ -69,13 +69,14 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
         this.resolver = resolver;
         this.queryStartNanoTime = queryStartNanoTime;
         this.replicaPlan = replicaPlan;
-        this.blockFor = replicaPlan.get().blockFor();
+        this.expectedResponses = replicaPlan.get().blockFor();
+        this.requiredResponses = expectedResponses;
         this.failureReasonByEndpoint = new ConcurrentHashMap<>();
         // we don't support read repair (or rapid read protection) for range scans yet (CASSANDRA-6897)
-        assert !(command instanceof PartitionRangeReadCommand) || blockFor >= replicaPlan().contacts().size();
+        assert !(command instanceof PartitionRangeReadCommand) || expectedResponses >= replicaPlan().contacts().size();
 
         if (logger.isTraceEnabled())
-            logger.trace("Blockfor is {}; setting up requests to {}", blockFor, this.replicaPlan);
+            logger.trace("ReadCallback expecting {} responses; setup for requests to {}", expectedResponses, this.replicaPlan);
     }
 
     protected P replicaPlan()
@@ -99,7 +100,8 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
     public void awaitResults() throws ReadFailureException, ReadTimeoutException
     {
         boolean signaled = await(command.getTimeout(MILLISECONDS), TimeUnit.MILLISECONDS);
-        boolean failed = failures > 0 && (blockFor > resolver.responses.size() || !resolver.isDataPresent());
+        int clRequiredResponses = replicaPlan.get().blockFor();
+        boolean failed = this.failed > 0 && resolver.responses.size() < clRequiredResponses;
         if (signaled && !failed)
         {
             assert resolver.isDataPresent();
@@ -109,34 +111,31 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
         if (Tracing.isTracing())
         {
             String gotData = received > 0 ? (resolver.isDataPresent() ? " (including data)" : " (only digests)") : "";
-            Tracing.trace("{}; received {} of {} responses{}", new Object[]{ (failed ? "Failed" : "Timed out"), received, blockFor, gotData });
+            Tracing.trace("{}; received {} of {} responses{}", new Object[]{ (failed ? "Failed" : "Timed out"), received, clRequiredResponses, gotData });
         }
         else if (logger.isDebugEnabled())
         {
             String gotData = received > 0 ? (resolver.isDataPresent() ? " (including data)" : " (only digests)") : "";
-            logger.debug("{}; received {} of {} responses{}", new Object[]{ (failed ? "Failed" : "Timed out"), received, blockFor, gotData });
+            logger.debug("{}; received {} of {} responses{}", new Object[]{ (failed ? "Failed" : "Timed out"), received, clRequiredResponses, gotData });
         }
 
         // Same as for writes, see AbstractWriteResponseHandler
         throw failed
-            ? new ReadFailureException(replicaPlan().consistencyLevel(), received, blockFor, resolver.isDataPresent(), failureReasonByEndpoint)
-            : new ReadTimeoutException(replicaPlan().consistencyLevel(), received, blockFor, resolver.isDataPresent());
-    }
-
-    public int blockFor()
-    {
-        return blockFor;
+              ? new ReadFailureException(replicaPlan().consistencyLevel(), received, clRequiredResponses, resolver.isDataPresent(), failureReasonByEndpoint)
+              : new ReadTimeoutException(replicaPlan().consistencyLevel(), received, clRequiredResponses, resolver.isDataPresent());
     }
 
     public void onResponse(Message<ReadResponse> message)
     {
         resolver.preprocess(message);
-        int n = waitingFor(message.from())
-              ? recievedUpdater.incrementAndGet(this)
-              : received;
+        incrementRecievedMaybeSignal(waitingFor(message.from()));
+    }
 
-        if (n >= blockFor && resolver.isDataPresent())
-            condition.signalAll();
+    private synchronized void incrementRecievedMaybeSignal(boolean countsForBlocking)
+    {
+        if (countsForBlocking)
+            ++received;
+        maybeSignal();
     }
 
     /**
@@ -154,7 +153,6 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
         onResponse(message);
     }
 
-
     @Override
     public boolean trackLatencyForSnitch()
     {
@@ -164,14 +162,34 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
     @Override
     public void onFailure(InetAddressAndPort from, RequestFailureReason failureReason)
     {
-        int n = waitingFor(from)
-              ? failuresUpdater.incrementAndGet(this)
-              : failures;
-
         failureReasonByEndpoint.put(from, failureReason);
+        incrementFailedMaybeSignal(waitingFor(from));
+    }
 
-        if (blockFor + n > replicaPlan().contacts().size())
+    private synchronized void incrementFailedMaybeSignal(boolean countsForBlocking)
+    {
+        if (countsForBlocking)
+            ++failed;
+        maybeSignal();
+    }
+
+    private void maybeSignal()
+    {
+        if ((received >= requiredResponses && resolver.isDataPresent()) ||
+            (received + failed == expectedResponses))
+        {
             condition.signalAll();
+        }
+    }
+
+    public synchronized boolean shouldSendSpecExec()
+    {
+        if (!condition.isSignaled())
+        {
+            ++expectedResponses;
+            return true;
+        }
+        return false;
     }
 
     @Override
