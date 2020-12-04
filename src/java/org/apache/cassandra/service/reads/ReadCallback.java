@@ -99,12 +99,15 @@ public class ReadCallback<E extends Endpoints<E>, P extends ReplicaPlan.ForRead<
     public void awaitResults() throws ReadFailureException, ReadTimeoutException
     {
         boolean signaled = await(command.getTimeout(MILLISECONDS), TimeUnit.MILLISECONDS);
-        boolean failed = failures > 0 && (blockFor > resolver.responses.size() || !resolver.isDataPresent());
+        // Here we are checking isDataPresent in addition to the responses size because there is a possibility
+        // that an asynchronous speculative execution request could be returning after a local failure already
+        // signaled. Responses may have been set while the data reference is not yet.
+        // https://github.com/apache/cassandra/blob/ecbb970aec0780aa97406f80ea05a24b1dfa650f/src/java/org/apache/cassandra/service/reads/DigestResolver.java#L56-L59
+        // CASSANDRA-16097
+        boolean failed = failures > 0 &&
+                         (blockFor > resolver.responses.size() || !resolver.isDataPresent());
         if (signaled && !failed)
-        {
-            assert resolver.isDataPresent();
             return;
-        }
 
         if (Tracing.isTracing())
         {

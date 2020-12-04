@@ -73,7 +73,7 @@ public class ReadFailureTest extends TestBaseImpl
                                          });
 
             // Run the request a bunch of times under racy conditions.
-            loopFailStatement(cluster, 1000000);
+            loopFailStatement(cluster, 5000);
         }
     }
 
@@ -89,10 +89,10 @@ public class ReadFailureTest extends TestBaseImpl
             }
             catch (Throwable t) // Throwable because the raised ReadFailure is loaded from a different classloader and doesn't match "ours"
             {
-                assertNotNull(String.format("Did not receive expected ReadFailureException. Instead caught %s\n%s",
-                                            t, ExceptionUtils.getStackTrace(t)),
-                              t.getMessage());
-                assertTrue(t.getMessage().contains(RequestFailureReason.READ_TOO_MANY_TOMBSTONES.name()));
+                String onFail = String.format("Did not receive expected ReadFailureException. Instead caught %s\n%s",
+                                              t, ExceptionUtils.getStackTrace(t));
+                assertNotNull(onFail, t.getMessage());
+                assertTrue(onFail, t.getMessage().contains(RequestFailureReason.READ_TOO_MANY_TOMBSTONES.name()));
             }
         }
     }
