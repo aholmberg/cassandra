@@ -211,8 +211,7 @@ parser.add_option('-k', '--keyspace', help='Authenticate to the given keyspace.'
 parser.add_option("-f", "--file", help="Execute commands from FILE, then exit")
 parser.add_option('--debug', action='store_true',
                   help='Show additional debugging information')
-parser.add_option("--encoding", help="Specify a non-default encoding for output." +
-                  " (Default: %s)" % (UTF8,))
+parser.add_option("--encoding", help="Specify a non-default encoding for output. (Default: %s)" % (UTF8,))
 parser.add_option("--cqlshrc", help="Specify an alternative cqlshrc file location.")
 parser.add_option('--cqlversion', default=None,
                   help='Specify a particular CQL version, '
@@ -812,6 +811,10 @@ class Shell(cmd.Cmd):
         self.empty_lines = 0
         self.statement_error = False
         self.single_statement = single_statement
+
+    @property
+    def batch_mode(self):
+        return not self.tty
 
     @property
     def is_using_utf8(self):
@@ -2642,8 +2645,8 @@ def main(options, hostname, port):
             # we silently ignore and fallback to UTC unless a custom timestamp format (which likely
             # does contain a TZ part) was specified
             if options.time_format != DEFAULT_TIMESTAMP_FORMAT:
-                sys.stderr.write("Warning: custom timestamp format specified in cqlshrc, but local timezone could not be detected.\n" +
-                                 "Either install Python 'tzlocal' module for auto-detection or specify client timezone in your cqlshrc.\n\n")
+                sys.stderr.write("Warning: custom timestamp format specified in cqlshrc, but local timezone could not be detected.\n"
+                                 + "Either install Python 'tzlocal' module for auto-detection or specify client timezone in your cqlshrc.\n\n")
 
     try:
         shell = Shell(hostname,
@@ -2681,8 +2684,8 @@ def main(options, hostname, port):
 
     shell.cmdloop()
     save_history()
-    batch_mode = options.file or options.execute
-    if batch_mode and shell.statement_error:
+
+    if shell.batch_mode and shell.statement_error:
         sys.exit(2)
 
 

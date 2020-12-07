@@ -23,18 +23,31 @@ import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryPoolMXBean;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.rmi.registry.LocateRegistry;
+import java.rmi.AccessException;
+import java.rmi.AlreadyBoundException;
+import java.rmi.NotBoundException;
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+import java.rmi.registry.Registry;
+import java.rmi.server.RMIClientSocketFactory;
 import java.rmi.server.RMIServerSocketFactory;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-
 import javax.management.ObjectName;
 import javax.management.StandardMBean;
 import javax.management.remote.JMXConnectorServer;
 import javax.management.remote.JMXServiceURL;
 import javax.management.remote.rmi.RMIConnectorServer;
+import javax.management.remote.rmi.RMIJRMPServerImpl;
+
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.Uninterruptibles;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.addthis.metrics3.reporter.config.ReporterConfig;
 import com.codahale.metrics.Meter;
@@ -44,20 +57,17 @@ import com.codahale.metrics.jvm.BufferPoolMetricSet;
 import com.codahale.metrics.jvm.FileDescriptorRatioGauge;
 import com.codahale.metrics.jvm.GarbageCollectorMetricSet;
 import com.codahale.metrics.jvm.MemoryUsageGaugeSet;
-import com.google.common.annotations.VisibleForTesting;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListenableFuture;
-import com.google.common.util.concurrent.Uninterruptibles;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import org.apache.cassandra.concurrent.*;
+import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
+import org.apache.cassandra.concurrent.ScheduledExecutors;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.Schema;
-import org.apache.cassandra.db.*;
-import org.apache.cassandra.batchlog.LegacyBatchlogMigrator;
+import org.apache.cassandra.cql3.functions.ThreadAwareSecurityManager;
+import org.apache.cassandra.db.ColumnFamilyStore;
+import org.apache.cassandra.db.Keyspace;
+import org.apache.cassandra.db.SizeEstimatesRecorder;
+import org.apache.cassandra.db.SystemKeyspace;
+import org.apache.cassandra.db.WindowsFailedSnapshotTracker;
 import org.apache.cassandra.db.commitlog.CommitLog;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.StartupException;
@@ -70,10 +80,15 @@ import org.apache.cassandra.metrics.CassandraMetricsRegistry;
 import org.apache.cassandra.metrics.DefaultNameFactory;
 import org.apache.cassandra.metrics.StorageMetrics;
 import org.apache.cassandra.schema.LegacySchemaMigrator;
-import org.apache.cassandra.cql3.functions.ThreadAwareSecurityManager;
 import org.apache.cassandra.thrift.ThriftServer;
 import org.apache.cassandra.tracing.Tracing;
-import org.apache.cassandra.utils.*;
+import org.apache.cassandra.utils.FBUtilities;
+import org.apache.cassandra.utils.JVMStabilityInspector;
+import org.apache.cassandra.utils.MBeanWrapper;
+import org.apache.cassandra.utils.Mx4jTool;
+import org.apache.cassandra.utils.NativeLibrary;
+import org.apache.cassandra.utils.RMIServerSocketFactoryImpl;
+import org.apache.cassandra.utils.WindowsTimer;
 
 /**
  * The <code>CassandraDaemon</code> is an abstraction for a Cassandra daemon
@@ -124,13 +139,22 @@ public class CassandraDaemon
 
         System.setProperty("java.rmi.server.hostname", InetAddress.getLoopbackAddress().getHostAddress());
         RMIServerSocketFactory serverFactory = new RMIServerSocketFactoryImpl();
-        Map<String, ?> env = Collections.singletonMap(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE, serverFactory);
+        Map<String, Object> env = new HashMap<>();
+        env.put(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE, serverFactory);
+        env.put("jmx.remote.rmi.server.credential.types",
+            new String[] { String[].class.getName(), String.class.getName() });
         try
         {
-            LocateRegistry.createRegistry(Integer.valueOf(jmxPort), null, serverFactory);
+            Registry registry = new JmxRegistry(Integer.valueOf(jmxPort), null, serverFactory, "jmxrmi");
             JMXServiceURL url = new JMXServiceURL(String.format("service:jmx:rmi://localhost/jndi/rmi://localhost:%s/jmxrmi", jmxPort));
-            jmxServer = new RMIConnectorServer(url, env, ManagementFactory.getPlatformMBeanServer());
+            @SuppressWarnings("resource")
+            RMIJRMPServerImpl server = new RMIJRMPServerImpl(Integer.valueOf(jmxPort),
+                                                             null,
+                                                             (RMIServerSocketFactory) env.get(RMIConnectorServer.RMI_SERVER_SOCKET_FACTORY_ATTRIBUTE),
+                                                             env);
+            jmxServer = new RMIConnectorServer(url, env, server, ManagementFactory.getPlatformMBeanServer());
             jmxServer.start();
+            ((JmxRegistry)registry).setRemoteServerStub(server.toStub());
         }
         catch (IOException e)
         {
@@ -140,8 +164,8 @@ public class CassandraDaemon
 
     private static final CassandraDaemon instance = new CassandraDaemon();
 
-    public Server thriftServer;
-    private NativeTransportService nativeTransportService;
+    private volatile Server thriftServer;
+    private volatile NativeTransportService nativeTransportService;
 
     private final boolean runManaged;
     protected final StartupChecks startupChecks;
@@ -210,26 +234,15 @@ public class CassandraDaemon
             public void uncaughtException(Thread t, Throwable e)
             {
                 StorageMetrics.exceptions.inc();
-                logger.error("Exception in thread " + t, e);
+                logger.error("Exception in thread {}", t, e);
                 Tracing.trace("Exception in thread {}", t, e);
                 for (Throwable e2 = e; e2 != null; e2 = e2.getCause())
                 {
-                    JVMStabilityInspector.inspectThrowable(e2);
-
-                    if (e2 instanceof FSError)
-                    {
-                        if (e2 != e) // make sure FSError gets logged exactly once.
-                            logger.error("Exception in thread " + t, e2);
-                        FileUtils.handleFSError((FSError) e2);
-                    }
-
-                    if (e2 instanceof CorruptSSTableException)
-                    {
-                        if (e2 != e)
-                            logger.error("Exception in thread " + t, e2);
-                        FileUtils.handleCorruptSSTable((CorruptSSTableException) e2);
-                    }
+                    // make sure error gets logged exactly once.
+                    if (e2 != e && (e2 instanceof FSError || e2 instanceof CorruptSSTableException))
+                        logger.error("Exception in thread {}", t, e2);
                 }
+                JVMStabilityInspector.inspectThrowable(e);
             }
         });
 
@@ -394,20 +407,23 @@ public class CassandraDaemon
         // due to scheduling errors or race conditions
         ScheduledExecutors.optionalTasks.scheduleWithFixedDelay(ColumnFamilyStore.getBackgroundCompactionTaskSubmitter(), 5, 1, TimeUnit.MINUTES);
 
-        // Thrift
-        InetAddress rpcAddr = DatabaseDescriptor.getRpcAddress();
-        int rpcPort = DatabaseDescriptor.getRpcPort();
-        int listenBacklog = DatabaseDescriptor.getRpcListenBacklog();
-        thriftServer = new ThriftServer(rpcAddr, rpcPort, listenBacklog);
-        initializeNativeTransport();
+        initializeClientTransports();
 
         completeSetup();
     }
 
-    public void initializeNativeTransport()
+    public synchronized void initializeClientTransports()
     {
+        // Thrift
+        InetAddress rpcAddr = DatabaseDescriptor.getRpcAddress();
+        int rpcPort = DatabaseDescriptor.getRpcPort();
+        int listenBacklog = DatabaseDescriptor.getRpcListenBacklog();
+        if (thriftServer == null)
+            thriftServer = new ThriftServer(rpcAddr, rpcPort, listenBacklog);
+
         // Native transport
-        nativeTransportService = new NativeTransportService();
+        if (nativeTransportService == null)
+            nativeTransportService = new NativeTransportService();
     }
 
     /*
@@ -484,6 +500,8 @@ public class CassandraDaemon
      */
     public void start()
     {
+        // check to see if transports may start else return without starting.  This is needed when in survey mode or
+        // when bootstrap has not completed.
         try
         {
             validateTransportsCanStart();
@@ -491,10 +509,15 @@ public class CassandraDaemon
         catch (IllegalStateException isx)
         {
             // If there are any errors, we just log and return in this case
-            logger.info(isx.getMessage());
+            logger.warn(isx.getMessage());
             return;
         }
 
+        startClientTransports();
+    }
+
+    private void startClientTransports()
+    {
         String nativeFlag = System.getProperty("cassandra.start_native_transport");
         if ((nativeFlag != null && Boolean.parseBoolean(nativeFlag)) || (nativeFlag == null && DatabaseDescriptor.startNativeTransport()))
         {
@@ -506,7 +529,7 @@ public class CassandraDaemon
 
         String rpcFlag = System.getProperty("cassandra.start_rpc");
         if ((rpcFlag != null && Boolean.parseBoolean(rpcFlag)) || (rpcFlag == null && DatabaseDescriptor.startRpc()))
-            thriftServer.start();
+            startThriftServer();
         else
             logger.info("Not starting RPC server as requested. Use JMX (StorageService->startRPCServer()) or nodetool (enablethrift) to start it");
     }
@@ -521,10 +544,7 @@ public class CassandraDaemon
         // On linux, this doesn't entirely shut down Cassandra, just the RPC server.
         // jsvc takes care of taking the rest down
         logger.info("Cassandra shutting down...");
-        if (thriftServer != null)
-            thriftServer.stop();
-        if (nativeTransportService != null)
-            nativeTransportService.destroy();
+        destroyClientTransports();
         StorageService.instance.setRpcReady(false);
 
         // On windows, we need to stop the entire system as prunsrv doesn't have the jsvc hooks
@@ -546,15 +566,13 @@ public class CassandraDaemon
     }
 
     @VisibleForTesting
-    public void destroyNativeTransport() throws InterruptedException
+    public void destroyClientTransports()
     {
+        stopThriftServer();
+        stopNativeTransport();
         if (nativeTransportService != null)
-        {
             nativeTransportService.destroy();
-            nativeTransportService = null;
-        }
     }
-
 
     /**
      * Clean up all resources obtained during the lifetime of the daemon. This
@@ -606,6 +624,8 @@ public class CassandraDaemon
             }
 
             start();
+
+            logger.info("Startup complete");
         }
         catch (Throwable e)
         {
@@ -665,19 +685,43 @@ public class CassandraDaemon
 
         if (nativeTransportService == null)
             throw new IllegalStateException("setup() must be called first for CassandraDaemon");
-        else
-            nativeTransportService.start();
+
+        nativeTransportService.start();
     }
 
     public void stopNativeTransport()
     {
         if (nativeTransportService != null)
+        {
             nativeTransportService.stop();
+        }
     }
 
     public boolean isNativeTransportRunning()
     {
-        return nativeTransportService != null ? nativeTransportService.isRunning() : false;
+        return nativeTransportService != null && nativeTransportService.isRunning();
+    }
+
+    public void startThriftServer()
+    {
+        validateTransportsCanStart();
+
+        if (thriftServer == null)
+            throw new IllegalStateException("setup() must be called first for CassandraDaemon");
+        thriftServer.start();
+    }
+
+    public void stopThriftServer()
+    {
+        if (thriftServer != null)
+        {
+            thriftServer.stop();
+        }
+    }
+
+    public boolean isThriftServerRunning()
+    {
+        return thriftServer != null && thriftServer.isRunning();
     }
 
     public int getMaxNativeProtocolVersion()
@@ -809,5 +853,49 @@ public class CassandraDaemon
          * Returns whether the server is currently running.
          */
         public boolean isRunning();
+    }
+
+
+    @SuppressWarnings("restriction")
+    private static class JmxRegistry extends sun.rmi.registry.RegistryImpl {
+        private final String lookupName;
+        private Remote remoteServerStub;
+
+        JmxRegistry(final int port,
+                    final RMIClientSocketFactory csf,
+                    RMIServerSocketFactory ssf,
+                    final String lookupName) throws RemoteException
+        {
+            super(port, csf, ssf);
+            this.lookupName = lookupName;
+        }
+
+        @Override
+        public Remote lookup(String s) throws RemoteException, NotBoundException
+        {
+            return lookupName.equals(s) ? remoteServerStub : null;
+        }
+
+        @Override
+        public void bind(String s, Remote remote) throws RemoteException, AlreadyBoundException, AccessException
+        {
+        }
+
+        @Override
+        public void unbind(String s) throws RemoteException, NotBoundException, AccessException {
+        }
+
+        @Override
+        public void rebind(String s, Remote remote) throws RemoteException, AccessException {
+        }
+
+        @Override
+        public String[] list() throws RemoteException {
+            return new String[] {lookupName};
+        }
+
+        public void setRemoteServerStub(Remote remoteServerStub) {
+            this.remoteServerStub = remoteServerStub;
+        }
     }
 }

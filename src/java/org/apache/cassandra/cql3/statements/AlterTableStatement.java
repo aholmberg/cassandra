@@ -30,8 +30,11 @@ import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.db.Keyspace;
 import org.apache.cassandra.db.marshal.AbstractType;
+import org.apache.cassandra.db.marshal.BytesType;
+import org.apache.cassandra.db.marshal.EmptyType;
 import org.apache.cassandra.db.view.View;
 import org.apache.cassandra.exceptions.*;
+import org.apache.cassandra.io.sstable.format.SSTableReader;
 import org.apache.cassandra.schema.IndexMetadata;
 import org.apache.cassandra.schema.Indexes;
 import org.apache.cassandra.schema.TableParams;
@@ -109,7 +112,26 @@ public class AlterTableStatement extends SchemaAlteringStatement
         switch (oType)
         {
             case ALTER:
-                throw new InvalidRequestException("Altering of types is not allowed");
+                // We do not support altering of types and only allow this to for people who have already one
+                // through the upgrade of 2.x CQL-created SSTables with Thrift writes, affected by CASSANDRA-15778.
+                if (meta.isDense()
+                    && meta.compactValueColumn().equals(def)
+                    && meta.compactValueColumn().type instanceof EmptyType
+                    && validator != null)
+                {
+                    if (validator.getType() instanceof BytesType)
+                    {
+                        cfm = meta.copyWithNewCompactValueType(validator.getType());
+                        break;
+                    }
+
+                    throw new InvalidRequestException(String.format("Compact value type can only be changed to BytesType, but %s was given.",
+                                                                    validator.getType()));
+                }
+                else
+                {
+                    throw new InvalidRequestException("Altering of types is not allowed");
+                }
             case ADD:
                 assert columnName != null;
                 if (meta.isDense())
@@ -255,6 +277,14 @@ public class AlterTableStatement extends SchemaAlteringStatement
             case DROP_COMPACT_STORAGE:
                 if (!meta.isCompactTable())
                     throw new InvalidRequestException("Cannot DROP COMPACT STORAGE on table without COMPACT STORAGE");
+
+                // TODO: Global check of the sstables to be added as part of CASSANDRA-15897.
+                // Currently this is only a local check of the SSTables versions
+                for (SSTableReader ssTableReader : Keyspace.open(keyspace()).getColumnFamilyStore(columnFamily()).getLiveSSTables())
+                {
+                    if (!ssTableReader.descriptor.version.isLatestVersion())
+                        throw new InvalidRequestException("Cannot DROP COMPACT STORAGE until all SSTables are upgraded, please run `nodetool upgradesstables` first.");
+                }
 
                 cfm = meta.asNonCompact();
                 break;

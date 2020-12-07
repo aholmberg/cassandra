@@ -185,11 +185,22 @@ public class Tracker
 
     public void addInitialSSTables(Iterable<SSTableReader> sstables)
     {
+        addInitialSSTablesWithoutUpdatingSize(sstables);
+        maybeFail(updateSizeTracking(emptySet(), sstables, null));
+        // no notifications or backup necessary
+    }
+
+    public void addInitialSSTablesWithoutUpdatingSize(Iterable<SSTableReader> sstables)
+    {
         if (!isDummy())
             setupOnline(sstables);
         apply(updateLiveSet(emptySet(), sstables));
-        maybeFail(updateSizeTracking(emptySet(), sstables, null));
         // no notifications or backup necessary
+    }
+
+    public void updateInitialSSTableSize(Iterable<SSTableReader> sstables)
+    {
+        maybeFail(updateSizeTracking(emptySet(), sstables, null));
     }
 
     public void addSSTables(Iterable<SSTableReader> sstables)
@@ -485,5 +496,13 @@ public class Tracker
     public View getView()
     {
         return view.get();
+    }
+
+    @VisibleForTesting
+    public void removeUnsafe(Set<SSTableReader> toRemove)
+    {
+        Pair<View, View> result = apply(view -> {
+            return updateLiveSet(toRemove, emptySet()).apply(view);
+        });
     }
 }

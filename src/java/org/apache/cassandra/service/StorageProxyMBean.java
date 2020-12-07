@@ -64,4 +64,15 @@ public interface StorageProxyMBean
 
     /** Returns each live node's schema version */
     public Map<String, List<String>> getSchemaVersions();
+
+    void enableSnapshotOnDuplicateRowDetection();
+    void disableSnapshotOnDuplicateRowDetection();
+    boolean getSnapshotOnDuplicateRowDetectionEnabled();
+
+    boolean getCheckForDuplicateRowsDuringReads();
+    void enableCheckForDuplicateRowsDuringReads();
+    void disableCheckForDuplicateRowsDuringReads();
+    boolean getCheckForDuplicateRowsDuringCompaction();
+    void enableCheckForDuplicateRowsDuringCompaction();
+    void disableCheckForDuplicateRowsDuringCompaction();
 }

@@ -81,8 +81,6 @@ import org.apache.cassandra.utils.memory.MemtableAllocator;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import static org.apache.cassandra.utils.ExecutorUtils.awaitTermination;
-import static org.apache.cassandra.utils.ExecutorUtils.shutdown;
 import static org.apache.cassandra.utils.Throwables.maybeFail;
 import static org.apache.cassandra.utils.Throwables.merge;
 
@@ -392,7 +390,6 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
         crcCheckChance = new DefaultValue<>(metadata.params.crcCheckChance);
         indexManager = new SecondaryIndexManager(this);
         viewManager = keyspace.viewManager.forTable(metadata);
-        metric = new TableMetrics(this);
         fileIndexGenerator.set(generation);
         sampleLatencyNanos = TimeUnit.MILLISECONDS.toNanos(DatabaseDescriptor.getReadRpcTimeout() / 2);
 
@@ -404,12 +401,13 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
             initialMemtable = new Memtable(new AtomicReference<>(CommitLog.instance.getContext()), this);
         data = new Tracker(initialMemtable, loadSSTables);
 
+        Collection<SSTableReader> sstables = null;
         // scan for sstables corresponding to this cf and load them
         if (data.loadsstables)
         {
             Directories.SSTableLister sstableFiles = directories.sstableLister(Directories.OnTxnErr.IGNORE).skipTemporary(true);
-            Collection<SSTableReader> sstables = SSTableReader.openAll(sstableFiles.list().entrySet(), metadata);
-            data.addInitialSSTables(sstables);
+            sstables = SSTableReader.openAll(sstableFiles.list().entrySet(), metadata);
+            data.addInitialSSTablesWithoutUpdatingSize(sstables);
         }
 
         // compaction strategy should be created after the CFS has been prepared
@@ -425,6 +423,13 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
         // create the private ColumnFamilyStores for the secondary column indexes
         for (IndexMetadata info : metadata.getIndexes())
             indexManager.addIndex(info);
+
+        metric = new TableMetrics(this);
+
+        if (data.loadsstables)
+        {
+            data.updateInitialSSTableSize(sstables);
+        }
 
         if (registerBookkeeping)
         {
@@ -699,7 +704,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
             }
             catch (IOException e)
             {
-                FileUtils.handleCorruptSSTable(new CorruptSSTableException(e, entry.getKey().filenameFor(Component.STATS)));
+                JVMStabilityInspector.inspectThrowable(new CorruptSSTableException(e, entry.getKey().filenameFor(Component.STATS)));
                 logger.error("Cannot read sstable {}; other IO error, skipping table", entry, e);
                 continue;
             }
@@ -729,19 +734,19 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
             }
             catch (CorruptSSTableException ex)
             {
-                FileUtils.handleCorruptSSTable(ex);
+                JVMStabilityInspector.inspectThrowable(ex);
                 logger.error("Corrupt sstable {}; skipping table", entry, ex);
                 continue;
             }
             catch (FSError ex)
             {
-                FileUtils.handleFSError(ex);
+                JVMStabilityInspector.inspectThrowable(ex);
                 logger.error("Cannot read sstable {}; file system error, skipping table", entry, ex);
                 continue;
             }
             catch (IOException ex)
             {
-                FileUtils.handleCorruptSSTable(new CorruptSSTableException(ex, entry.getKey().filenameFor(Component.DATA)));
+                JVMStabilityInspector.inspectThrowable(new CorruptSSTableException(ex, entry.getKey().filenameFor(Component.DATA)));
                 logger.error("Cannot read sstable {}; other IO error, skipping table", entry, ex);
                 continue;
             }
@@ -1640,9 +1645,9 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
     public Set<SSTableReader> snapshotWithoutFlush(String snapshotName, Predicate<SSTableReader> predicate, boolean ephemeral)
     {
         Set<SSTableReader> snapshottedSSTables = new HashSet<>();
+        final JSONArray filesJSONArr = new JSONArray();
         for (ColumnFamilyStore cfs : concatWithIndexes())
         {
-            final JSONArray filesJSONArr = new JSONArray();
             try (RefViewFragment currentView = cfs.selectAndReference(View.select(SSTableSet.CANONICAL, (x) -> predicate == null || predicate.apply(x))))
             {
                 for (SSTableReader ssTable : currentView.sstables)
@@ -1655,13 +1660,13 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
                         logger.trace("Snapshot for {} keyspace data file {} created in {}", keyspace, ssTable.getFilename(), snapshotDirectory);
                     snapshottedSSTables.add(ssTable);
                 }
-
-                writeSnapshotManifest(filesJSONArr, snapshotName);
-
-                if (!Schema.isLocalSystemKeyspace(metadata.ksName) && !Schema.isReplicatedSystemKeyspace(metadata.ksName))
-                    writeSnapshotSchema(snapshotName);
             }
         }
+        writeSnapshotManifest(filesJSONArr, snapshotName);
+
+        if (!Schema.isLocalSystemKeyspace(metadata.ksName) && !Schema.isReplicatedSystemKeyspace(metadata.ksName))
+            writeSnapshotSchema(snapshotName);
+
         if (ephemeral)
             createEphemeralSnapshotMarkerFile(snapshotName);
         return snapshottedSSTables;
