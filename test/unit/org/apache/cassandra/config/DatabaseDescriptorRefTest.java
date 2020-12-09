@@ -77,6 +77,7 @@ public class DatabaseDescriptorRefTest
     "org.apache.cassandra.config.EncryptionOptions$ClientEncryptionOptions",
     "org.apache.cassandra.config.EncryptionOptions$ServerEncryptionOptions",
     "org.apache.cassandra.config.EncryptionOptions$ServerEncryptionOptions$InternodeEncryption",
+    "org.apache.cassandra.config.ReplicaFilteringProtectionOptions",
     "org.apache.cassandra.config.YamlConfigurationLoader",
     "org.apache.cassandra.config.YamlConfigurationLoader$PropertiesChecker",
     "org.apache.cassandra.config.YamlConfigurationLoader$PropertiesChecker$1",
@@ -216,7 +217,7 @@ public class DatabaseDescriptorRefTest
             "clientInitialization",
             "applyAddressConfig",
             "applyThriftHSHA",
-            "applyInitialTokens",
+            "applyTokensConfig",
             // no seed provider in default configuration for clients
             // "applySeedProvider",
             // definitely not safe for clients - implicitly instantiates schema

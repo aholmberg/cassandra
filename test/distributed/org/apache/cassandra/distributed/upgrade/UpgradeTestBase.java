@@ -23,19 +23,44 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 
-import org.apache.cassandra.db.MutableDeletionInfo;
+import org.junit.After;
+import org.junit.BeforeClass;
+
 import org.apache.cassandra.distributed.UpgradeableCluster;
+import org.apache.cassandra.distributed.api.ICluster;
+import org.apache.cassandra.distributed.api.IInstanceConfig;
+import org.apache.cassandra.distributed.api.IUpgradeableInstance;
 import org.apache.cassandra.distributed.impl.Instance;
-import org.apache.cassandra.distributed.impl.Versions;
-import org.apache.cassandra.distributed.impl.Versions.Version;
-import org.apache.cassandra.distributed.test.DistributedTestBase;
+import org.apache.cassandra.distributed.shared.DistributedTestBase;
+import org.apache.cassandra.distributed.shared.Versions;
 
-import static org.apache.cassandra.distributed.impl.Versions.Major;
-import static org.apache.cassandra.distributed.impl.Versions.find;
+import static org.apache.cassandra.distributed.shared.Versions.Major;
+import static org.apache.cassandra.distributed.shared.Versions.Version;
+import static org.apache.cassandra.distributed.shared.Versions.find;
 
 public class UpgradeTestBase extends DistributedTestBase
 {
+    @After
+    public void afterEach()
+    {
+        System.runFinalization();
+        System.gc();
+    }
+
+    @BeforeClass
+    public static void beforeClass() throws Throwable
+    {
+        ICluster.setup();
+    }
+
+
+    public UpgradeableCluster.Builder builder()
+    {
+        return UpgradeableCluster.build();
+    }
+
     public static interface RunOnCluster
     {
         public void run(UpgradeableCluster cluster) throws Throwable;
@@ -67,6 +92,7 @@ public class UpgradeTestBase extends DistributedTestBase
         private RunOnClusterAndNode runAfterNodeUpgrade;
         private RunOnCluster runAfterClusterUpgrade;
         private final Set<Integer> nodesToUpgrade = new HashSet<>();
+        private Consumer<IInstanceConfig> configConsumer;
 
         public TestCase()
         {
@@ -117,6 +143,12 @@ public class UpgradeTestBase extends DistributedTestBase
             return this;
         }
 
+        public TestCase withConfig(Consumer<IInstanceConfig> config)
+        {
+            this.configConsumer = config;
+            return this;
+        }
+
         public void run() throws Throwable
         {
             if (setup == null)
@@ -135,13 +167,13 @@ public class UpgradeTestBase extends DistributedTestBase
 
             for (TestVersions upgrade : this.upgrade)
             {
-                try (UpgradeableCluster cluster = init(UpgradeableCluster.create(nodeCount, upgrade.initial)))
+                try (UpgradeableCluster cluster = init(UpgradeableCluster.create(nodeCount, upgrade.initial, configConsumer)))
                 {
                     setup.run(cluster);
 
                     for (Version version : upgrade.upgrade)
                     {
-                        for (int n : nodesToUpgrade)
+                        for (int n=1; n<=nodesToUpgrade.size(); n++)
                         {
                             cluster.get(n).shutdown().get();
                             cluster.get(n).setVersion(version);

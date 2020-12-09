@@ -18,6 +18,7 @@
 
 package org.apache.cassandra.distributed.test;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -26,22 +27,23 @@ import java.util.stream.Stream;
 import org.junit.Assert;
 import org.junit.Test;
 
-import org.apache.cassandra.distributed.Cluster;
+import org.apache.cassandra.distributed.api.ICluster;
 import org.apache.cassandra.distributed.api.IInstance;
-import org.apache.cassandra.distributed.impl.NetworkTopology;
-import org.apache.cassandra.utils.Pair;
+import org.apache.cassandra.distributed.api.IInvokableInstance;
+import org.apache.cassandra.distributed.shared.NetworkTopology;
 
-public class NetworkTopologyTest extends DistributedTestBase
+// TODO: this test should be removed after running in-jvm dtests is set up via the shared API repository
+public class NetworkTopologyTest extends TestBaseImpl
 {
     @Test
     public void namedDcTest() throws Throwable
     {
-        try (Cluster cluster = Cluster.build()
-                                      .withNodeIdTopology(Collections.singletonMap(1, NetworkTopology.dcAndRack("somewhere", "rack0")))
-                                      .withRack("elsewhere", "firstrack", 1)
-                                      .withRack("elsewhere", "secondrack", 2)
-                                      .withDC("nearthere", 4)
-                                      .start())
+        try (ICluster<IInvokableInstance> cluster = builder()
+                                                    .withNodeIdTopology(Collections.singletonMap(1, NetworkTopology.dcAndRack("somewhere", "rack0")))
+                                                    .withRack("elsewhere", "firstrack", 1)
+                                                    .withRack("elsewhere", "secondrack", 2)
+                                                    .withDC("nearthere", 4)
+                                                    .createWithoutStarting())
         {
             Assert.assertEquals(1, cluster.stream("somewhere").count());
             Assert.assertEquals(1, cluster.stream("elsewhere", "firstrack").count());
@@ -61,9 +63,8 @@ public class NetworkTopologyTest extends DistributedTestBase
     public void automaticNamedDcTest() throws Throwable
 
     {
-        try (Cluster cluster = Cluster.build()
-                                      .withRacks(2, 1, 3)
-                                      .start())
+        try (ICluster cluster = builder().withRacks(2, 1, 3)
+                                         .createWithoutStarting())
         {
             Assert.assertEquals(6, cluster.stream().count());
             Assert.assertEquals(3, cluster.stream("datacenter1").count());
@@ -72,29 +73,29 @@ public class NetworkTopologyTest extends DistributedTestBase
     }
 
     @Test(expected = IllegalStateException.class)
-    public void noCountsAfterNamingDCsTest()
+    public void noCountsAfterNamingDCsTest() throws IOException
     {
-        Cluster.build()
-               .withDC("nameddc", 1)
-               .withDCs(1);
+        builder().withDC("nameddc", 1)
+                 .withDCs(1)
+                 .createWithoutStarting();
     }
 
     @Test(expected = IllegalStateException.class)
-    public void mustProvideNodeCountBeforeWithDCsTest()
+    public void mustProvideNodeCountBeforeWithDCsTest() throws IOException
     {
-        Cluster.build()
-               .withDCs(1);
+        builder().withDCs(1)
+                 .createWithoutStarting();
     }
 
     @Test(expected = IllegalStateException.class)
     public void noEmptyNodeIdTopologyTest()
     {
-        Cluster.build().withNodeIdTopology(Collections.emptyMap());
+        builder().withNodeIdTopology(Collections.emptyMap());
     }
 
     @Test(expected = IllegalStateException.class)
     public void noHolesInNodeIdTopologyTest()
     {
-        Cluster.build().withNodeIdTopology(Collections.singletonMap(2, NetworkTopology.dcAndRack("doomed", "rack")));
+        builder().withNodeIdTopology(Collections.singletonMap(2, NetworkTopology.dcAndRack("doomed", "rack")));
     }
 }

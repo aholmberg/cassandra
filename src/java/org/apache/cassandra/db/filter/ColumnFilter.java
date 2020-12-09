@@ -28,6 +28,7 @@ import org.apache.cassandra.cql3.ColumnIdentifier;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.rows.CellPath;
 import org.apache.cassandra.config.ColumnDefinition;
+import org.apache.cassandra.gms.Gossiper;
 import org.apache.cassandra.io.util.DataInputPlus;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.net.MessagingService;
@@ -179,7 +180,12 @@ public class ColumnFilter
     public boolean fetchedCellIsQueried(ColumnDefinition column, CellPath path)
     {
         assert path != null;
-        if (!isFetchAll || subSelections == null)
+
+        // first verify that the column to which the cell belongs is queried
+        if (!fetchedColumnIsQueried(column))
+            return false;
+
+        if (subSelections == null)
             return true;
 
         SortedSet<ColumnSubselection> s = subSelections.get(column.name);
@@ -351,6 +357,10 @@ public class ColumnFilter
                     s.put(subSelection.column().name, subSelection);
             }
 
+            // see CASSANDRA-15833
+            if (isFetchAll && Gossiper.instance.isAnyNodeOn30())
+                queried = null;
+
             return new ColumnFilter(isFetchAll, isFetchAll ? metadata.partitionColumns() : null, queried, s);
         }
     }
@@ -466,8 +476,8 @@ public class ColumnFilter
             {
                 if (version >= MessagingService.VERSION_3014)
                 {
-                    Columns statics = Columns.serializer.deserialize(in, metadata);
-                    Columns regulars = Columns.serializer.deserialize(in, metadata);
+                    Columns statics = Columns.serializer.deserializeStatics(in, metadata);
+                    Columns regulars = Columns.serializer.deserializeRegulars(in, metadata);
                     fetched = new PartitionColumns(statics, regulars);
                 }
                 else
@@ -478,8 +488,8 @@ public class ColumnFilter
 
             if (hasQueried)
             {
-                Columns statics = Columns.serializer.deserialize(in, metadata);
-                Columns regulars = Columns.serializer.deserialize(in, metadata);
+                Columns statics = Columns.serializer.deserializeStatics(in, metadata);
+                Columns regulars = Columns.serializer.deserializeRegulars(in, metadata);
                 queried = new PartitionColumns(statics, regulars);
             }
 
@@ -494,6 +504,10 @@ public class ColumnFilter
                     subSelections.put(subSel.column().name, subSel);
                 }
             }
+
+            // See CASSANDRA-15833
+            if (version <= MessagingService.VERSION_3014 && isFetchAll)
+                queried = null;
 
             return new ColumnFilter(isFetchAll, fetched, queried, subSelections);
         }

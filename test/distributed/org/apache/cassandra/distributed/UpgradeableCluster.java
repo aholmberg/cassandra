@@ -18,14 +18,14 @@
 
 package org.apache.cassandra.distributed;
 
-import java.io.File;
-import java.util.List;
+import java.io.IOException;
+import java.util.function.Consumer;
 
-import org.apache.cassandra.distributed.api.ICluster;
+import org.apache.cassandra.distributed.api.IInstanceConfig;
+import org.apache.cassandra.distributed.api.IUpgradeableInstance;
 import org.apache.cassandra.distributed.impl.AbstractCluster;
-import org.apache.cassandra.distributed.impl.IUpgradeableInstance;
-import org.apache.cassandra.distributed.impl.InstanceConfig;
-import org.apache.cassandra.distributed.impl.Versions;
+import org.apache.cassandra.distributed.shared.AbstractBuilder;
+import org.apache.cassandra.distributed.shared.Versions;
 
 /**
  * A multi-version cluster, offering only the cross-version API
@@ -34,24 +34,25 @@ import org.apache.cassandra.distributed.impl.Versions;
  * to permit upgrade tests to perform cluster operations without updating the cross-version API,
  * so long as one node is up-to-date.
  */
-public class UpgradeableCluster extends AbstractCluster<IUpgradeableInstance> implements ICluster, AutoCloseable
+public class UpgradeableCluster extends AbstractCluster<IUpgradeableInstance> implements AutoCloseable
 {
-    private UpgradeableCluster(File root, Versions.Version version, List<InstanceConfig> configs, ClassLoader sharedClassLoader)
+    private UpgradeableCluster(Builder builder)
     {
-        super(root, version, configs, sharedClassLoader);
+        super(builder);
     }
 
-    protected IUpgradeableInstance newInstanceWrapper(int generation, Versions.Version version, InstanceConfig config)
+    protected IUpgradeableInstance newInstanceWrapper(int generation, Versions.Version version, IInstanceConfig config)
     {
+        config.set(Constants.KEY_DTEST_API_CONFIG_CHECK, false);
         return new Wrapper(generation, version, config);
     }
 
-    public static Builder<IUpgradeableInstance, UpgradeableCluster> build()
+    public static Builder build()
     {
-        return new Builder<>(UpgradeableCluster::new);
+        return new Builder();
     }
 
-    public static Builder<IUpgradeableInstance, UpgradeableCluster> build(int nodeCount)
+    public static Builder build(int nodeCount)
     {
         return build().withNodes(nodeCount);
     }
@@ -61,9 +62,22 @@ public class UpgradeableCluster extends AbstractCluster<IUpgradeableInstance> im
         return build(nodeCount).start();
     }
 
+    public static UpgradeableCluster create(int nodeCount, Versions.Version version, Consumer<IInstanceConfig> configUpdater) throws IOException
+    {
+        return build(nodeCount).withConfig(configUpdater).withVersion(version).start();
+    }
+
     public static UpgradeableCluster create(int nodeCount, Versions.Version version) throws Throwable
     {
         return build(nodeCount).withVersion(version).start();
     }
-}
 
+    public static final class Builder extends AbstractBuilder<IUpgradeableInstance, UpgradeableCluster, Builder>
+    {
+
+        public Builder()
+        {
+            super(UpgradeableCluster::new);
+        }
+    }
+}

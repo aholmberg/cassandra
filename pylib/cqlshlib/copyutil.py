@@ -53,7 +53,7 @@ from cassandra.util import Date, Time
 
 from cql3handling import CqlRuleSet
 from displaying import NO_COLOR_MAP
-from formatting import format_value_default, CqlType, DateTimeFormat, EMPTY, get_formatter
+from formatting import format_value_default, CqlType, DateTimeFormat, EMPTY, get_formatter, BlobType
 from sslhandling import ssl_settings
 
 PROFILE_ON = False
@@ -1868,7 +1868,7 @@ class ImportConversion(object):
             return converters.get(t.typename, convert_unknown)(v, ct=t)
 
         def convert_blob(v, **_):
-            return bytearray.fromhex(v[2:])
+            return BlobType(v[2:].decode("hex"))
 
         def convert_text(v, **_):
             return v
@@ -1949,9 +1949,9 @@ class ImportConversion(object):
             return ret
 
         # this should match all possible CQL and CQLSH datetime formats
-        p = re.compile("(\d{4})\-(\d{2})\-(\d{2})\s?(?:'T')?" +  # YYYY-MM-DD[( |'T')]
-                       "(?:(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?))?" +  # [HH:MM[:SS[.NNNNNN]]]
-                       "(?:([+\-])(\d{2}):?(\d{2}))?")  # [(+|-)HH[:]MM]]
+        p = re.compile(r"(\d{4})\-(\d{2})\-(\d{2})\s?(?:'T')?"  # YYYY-MM-DD[( |'T')]
+                       + r"(?:(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,6}))?))?"  # [HH:MM[:SS[.NNNNNN]]]
+                       + r"(?:([+\-])(\d{2}):?(\d{2}))?")  # [(+|-)HH[:]MM]]
 
         def convert_datetime(val, **_):
             try:

@@ -333,7 +333,7 @@ public class DatabaseDescriptor
 
         applyRequestScheduler();
 
-        applyInitialTokens();
+        applyTokensConfig();
 
         applySeedProvider();
 
@@ -616,7 +616,7 @@ public class DatabaseDescriptor
         if (conf.concurrent_compactors <= 0)
             throw new ConfigurationException("concurrent_compactors should be strictly greater than 0, but was " + conf.concurrent_compactors, false);
 
-        if (conf.num_tokens > MAX_NUM_TOKENS)
+        if (conf.num_tokens != null && conf.num_tokens > MAX_NUM_TOKENS)
             throw new ConfigurationException(String.format("A maximum number of %d tokens per node is supported", MAX_NUM_TOKENS), false);
 
         try
@@ -942,16 +942,38 @@ public class DatabaseDescriptor
             throw new ConfigurationException("The seed provider lists no seeds.", false);
     }
 
-    public static void applyInitialTokens()
+    public static void applyTokensConfig()
+    {
+        applyTokensConfig(conf);
+    }
+
+    static void applyTokensConfig(Config conf)
     {
         if (conf.initial_token != null)
         {
             Collection<String> tokens = tokensFromString(conf.initial_token);
+            if (conf.num_tokens == null)
+            {
+                if (tokens.size() == 1)
+                    conf.num_tokens = 1;
+                else
+                    throw new ConfigurationException("initial_token was set but num_tokens is not!", false);
+            }
+
             if (tokens.size() != conf.num_tokens)
-                throw new ConfigurationException("The number of initial tokens (by initial_token) specified is different from num_tokens value", false);
+            {
+                throw new ConfigurationException(String.format("The number of initial tokens (by initial_token) specified (%s) is different from num_tokens value (%s)",
+                                                               tokens.size(),
+                                                               conf.num_tokens),
+                                                 false);
+            }
 
             for (String token : tokens)
                 partitioner.getTokenFactory().validate(token);
+        }
+        else if (conf.num_tokens == null)
+        {
+            conf.num_tokens = 1;
         }
     }
 
@@ -1686,6 +1708,26 @@ public class DatabaseDescriptor
     public static void setTombstoneFailureThreshold(int threshold)
     {
         conf.tombstone_failure_threshold = threshold;
+    }
+
+    public static int getCachedReplicaRowsWarnThreshold()
+    {
+        return conf.replica_filtering_protection.cached_rows_warn_threshold;
+    }
+
+    public static void setCachedReplicaRowsWarnThreshold(int threshold)
+    {
+        conf.replica_filtering_protection.cached_rows_warn_threshold = threshold;
+    }
+
+    public static int getCachedReplicaRowsFailThreshold()
+    {
+        return conf.replica_filtering_protection.cached_rows_fail_threshold;
+    }
+
+    public static void setCachedReplicaRowsFailThreshold(int threshold)
+    {
+        conf.replica_filtering_protection.cached_rows_fail_threshold = threshold;
     }
 
     /**
@@ -2589,4 +2631,35 @@ public class DatabaseDescriptor
     {
         return strictRuntimeChecks;
     }
+
+    public static boolean snapshotOnDuplicateRowDetection()
+    {
+        return conf.snapshot_on_duplicate_row_detection;
+    }
+
+    public static void setSnapshotOnDuplicateRowDetection(boolean enabled)
+    {
+        conf.snapshot_on_duplicate_row_detection = enabled;
+    }
+
+    public static boolean checkForDuplicateRowsDuringReads()
+    {
+        return conf.check_for_duplicate_rows_during_reads;
+    }
+
+    public static void setCheckForDuplicateRowsDuringReads(boolean enabled)
+    {
+        conf.check_for_duplicate_rows_during_reads = enabled;
+    }
+
+    public static boolean checkForDuplicateRowsDuringCompaction()
+    {
+        return conf.check_for_duplicate_rows_during_compaction;
+    }
+
+    public static void setCheckForDuplicateRowsDuringCompaction(boolean enabled)
+    {
+        conf.check_for_duplicate_rows_during_compaction = enabled;
+    }
+
 }

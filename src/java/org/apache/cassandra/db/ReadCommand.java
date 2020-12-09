@@ -342,6 +342,13 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
 
     protected abstract int oldestUnrepairedTombstone();
 
+    /**
+     * Whether the underlying {@code ClusteringIndexFilter} is reversed or not.
+     *
+     * @return whether the underlying {@code ClusteringIndexFilter} is reversed or not.
+     */
+    public abstract boolean isReversed();
+
     public ReadResponse createResponse(UnfilteredPartitionIterator iterator)
     {
         // validate that the sequence of RT markers is correct: open is followed by close, deletion times for both
@@ -563,8 +570,8 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
                 if (warnTombstones)
                 {
                     String msg = String.format(
-                            "Read %d live rows and %d tombstone cells for query %1.512s (see tombstone_warn_threshold)",
-                            liveRows, tombstones, ReadCommand.this.toCQLString());
+                            "Read %d live rows and %d tombstone cells for query %1.512s; token %s (see tombstone_warn_threshold)",
+                            liveRows, tombstones, ReadCommand.this.toCQLString(), currentKey.getToken());
                     ClientWarn.instance.warn(msg);
                     logger.warn(msg);
                 }
@@ -1344,6 +1351,7 @@ public abstract class ReadCommand extends MonitorableImpl implements ReadQuery
             long size = 1;  // message type (single byte)
             size += TypeSizes.sizeof(command.isDigestQuery());
             size += TypeSizes.sizeof(metadata.ksName);
+            size += TypeSizes.sizeof(metadata.cfName);
             size += TypeSizes.sizeof((short) keySize) + keySize;
             size += TypeSizes.sizeof((long) command.nowInSec());
 

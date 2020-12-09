@@ -124,6 +124,7 @@ public class NodeProbe implements AutoCloseable
     protected StorageProxyMBean spProxy;
     protected HintedHandOffManagerMBean hhProxy;
     protected BatchlogManagerMBean bmProxy;
+    protected Output output;
     private boolean failed;
 
     /**
@@ -142,6 +143,7 @@ public class NodeProbe implements AutoCloseable
         this.port = port;
         this.username = username;
         this.password = password;
+        this.output = Output.CONSOLE;
         connect();
     }
 
@@ -156,6 +158,7 @@ public class NodeProbe implements AutoCloseable
     {
         this.host = host;
         this.port = port;
+        this.output = Output.CONSOLE;
         connect();
     }
 
@@ -169,7 +172,16 @@ public class NodeProbe implements AutoCloseable
     {
         this.host = host;
         this.port = defaultPort;
+        this.output = Output.CONSOLE;
         connect();
+    }
+
+    protected NodeProbe()
+    {
+        // this constructor is only used for extensions to rewrite their own connect method
+        this.host = "";
+        this.port = 0;
+        this.output = Output.CONSOLE;
     }
 
     /**
@@ -250,6 +262,16 @@ public class NodeProbe implements AutoCloseable
         }
     }
 
+    public void setOutput(Output output)
+    {
+        this.output = output;
+    }
+
+    public Output output()
+    {
+        return output;
+    }
+
     public int forceKeyspaceCleanup(int jobs, String keyspaceName, String... tables) throws IOException, ExecutionException, InterruptedException
     {
         return ssProxy.forceKeyspaceCleanup(jobs, keyspaceName, tables);
@@ -278,7 +300,7 @@ public class NodeProbe implements AutoCloseable
     private void checkJobs(PrintStream out, int jobs)
     {
         // TODO this should get the configured number of concurrent_compactors via JMX and not using DatabaseDescriptor
-        DatabaseDescriptor.toolInitialization();
+        DatabaseDescriptor.toolInitialization(false); // if running in dtest, this would fail if true (default)
         if (jobs > DatabaseDescriptor.getConcurrentCompactors())
             out.println(String.format("jobs (%d) is bigger than configured concurrent_compactors (%d) on this host, using at most %d threads", jobs, DatabaseDescriptor.getConcurrentCompactors(), DatabaseDescriptor.getConcurrentCompactors()));
     }
@@ -864,6 +886,10 @@ public class NodeProbe implements AutoCloseable
     public MessagingServiceMBean getMessagingServiceProxy()
     {
         return msProxy;
+    }
+
+    public StorageServiceMBean getStorageService() {
+        return ssProxy;
     }
 
     public GossiperMBean getGossProxy()
