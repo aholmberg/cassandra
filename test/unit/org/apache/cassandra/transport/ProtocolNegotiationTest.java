@@ -92,9 +92,9 @@ public class ProtocolNegotiationTest extends CQLTester
     @Test
     public void testDynamicLimit() throws Throwable
     {
-        InetAddress peer1 = setupPeer("127.1.0.1", "2.2.0");
-        InetAddress peer2 = setupPeer("127.1.0.2", "2.2.0");
-        InetAddress peer3 = setupPeer("127.1.0.3", "2.2.0");
+        InetAddress peer1 = setupPeer("127.1.0.1", "2.1.0");
+        InetAddress peer2 = setupPeer("127.1.0.2", "2.1.0");
+        InetAddress peer3 = setupPeer("127.1.0.3", "2.1.0");
         reinitializeNetwork();
         try
         {
