@@ -54,7 +54,7 @@ public class DynamicLimitTest
         InetAddress peer = null;
         try
         {
-            peer = setupPeer("127.1.0.1", "2.2.0");
+            peer = setupPeer("127.1.0.1", "2.1.0");
             ConfiguredLimit limit = ConfiguredLimit.newLimit();
             assertEquals(ProtocolVersion.MAX_SUPPORTED_VERSION, limit.getMaxVersion());
 
@@ -95,7 +95,7 @@ public class DynamicLimitTest
             assertEquals(ProtocolVersion.MAX_SUPPORTED_VERSION, limit.getMaxVersion());
 
             // learn that peer doesn't actually fully support V4, behaviour should remain the same
-            updatePeerInfo(peer, "2.2.0");
+            updatePeerInfo(peer, "2.1.0");
             limit.updateMaxSupportedVersion();
             assertEquals(ProtocolVersion.MAX_SUPPORTED_VERSION, limit.getMaxVersion());
 

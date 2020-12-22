@@ -29,7 +29,7 @@ public abstract class ConfiguredLimit implements ProtocolVersionLimit
 {
     private static final Logger logger = LoggerFactory.getLogger(ConfiguredLimit.class);
     static final String DISABLE_MAX_PROTOCOL_AUTO_OVERRIDE = "cassandra.disable_max_protocol_auto_override";
-    static final CassandraVersion MIN_VERSION_FOR_V4 = new CassandraVersion("3.0.0");
+    static final CassandraVersion MIN_VERSION_FOR_V4 = new CassandraVersion("2.2.0");
 
     public abstract ProtocolVersion getMaxVersion();
     public abstract void updateMaxSupportedVersion();
