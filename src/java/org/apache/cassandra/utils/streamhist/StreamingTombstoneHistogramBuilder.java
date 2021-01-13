@@ -120,6 +120,7 @@ public class StreamingTombstoneHistogramBuilder
      */
     public void flushHistogram()
     {
+        Spool spool = this.spool;
         if (spool != null)
         {
             spool.forEach(this::flushValue);
