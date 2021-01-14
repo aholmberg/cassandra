@@ -111,6 +111,7 @@ public class StreamingTombstoneHistogramBuilder
         }
         else
         {
+            assert spool != null: "UPDATE AFTER CLEAR";
             flushValue(point, value);
         }
     }
