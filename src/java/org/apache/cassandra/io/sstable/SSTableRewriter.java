@@ -80,7 +80,7 @@ public class SSTableRewriter extends Transactional.AbstractTransactional impleme
         this(transaction, maxAge, preemptiveOpenInterval, keepOriginals, false);
     }
 
-    public SSTableRewriter(ILifecycleTransaction transaction, long maxAge, long preemptiveOpenInterval, boolean keepOriginals, boolean eagerWriterMetaRelease)
+    protected SSTableRewriter(ILifecycleTransaction transaction, long maxAge, long preemptiveOpenInterval, boolean keepOriginals, boolean eagerWriterMetaRelease)
     {
         this.transaction = transaction;
         this.maxAge = maxAge;

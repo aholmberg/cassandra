@@ -811,12 +811,6 @@ public class SSTableRewriterTest extends SSTableWriterTestBase
         validateCFS(cfs);
     }
 
-    /**
-     * tests SSTableRewriter ctor arg controlling whether writers metadata buffers are released.
-     * Verifies that writers trip an assert when updated after cleared on switch
-     *
-     * CASSANDRA-14834
-     */
     @Test
     public void testCanonicalSSTables() throws ExecutionException, InterruptedException
     {
@@ -856,6 +850,12 @@ public class SSTableRewriterTest extends SSTableWriterTestBase
 
     }
 
+    /**
+     * tests SSTableRewriter ctor arg controlling whether writers metadata buffers are released.
+     * Verifies that writers trip an assert when updated after cleared on switch
+     *
+     * CASSANDRA-14834
+     */
     @Test
     public void testWriterClearing()
     {
@@ -881,7 +881,10 @@ public class SSTableRewriterTest extends SSTableWriterTestBase
                 firstWriter.append(uri);
                 fail("Expected AssertionError was not thrown.");
             }
-            catch(AssertionError ae) {}
+            catch(AssertionError ae) {
+                if (!ae.getMessage().contains("update is being called after releaseBuffers"))
+                    throw ae;
+            }
         }
 
         // Can update a writer that is not eagerly cleared on switch
