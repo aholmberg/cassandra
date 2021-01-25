@@ -49,20 +49,11 @@ import static org.junit.Assert.assertTrue;
 @RunWith(OrderedJUnit4ClassRunner.class)
 public class NodetoolTableStatsTest extends CQLTester
 {
-    private static NodeProbe probe;
-
     @BeforeClass
     public static void setup() throws Exception
     {
         StorageService.instance.initServer();
         startJMXServer();
-        probe = new NodeProbe(jmxHost, jmxPort);
-    }
-
-    @AfterClass
-    public static void teardown() throws IOException
-    {
-        probe.close();
     }
 
     @Test
@@ -236,14 +227,5 @@ public class NodetoolTableStatsTest extends CQLTester
         assertThat(tool.getStdout(), CoreMatchers.containsString("argument for top must be a positive integer"));
         tool.assertCleanStdErr();
         assertEquals(1, tool.getExitCode());
-    }
-
-    @Test
-    public void testStatusArg()
-    {
-        ToolResult tool = ToolRunner.invokeNodetool("status", "-r");
-        assertThat(tool.getStdout(), CoreMatchers.containsString("UN"));
-        tool.assertCleanStdErr();
-        assertEquals(0, tool.getExitCode());
     }
 }
