@@ -117,9 +117,9 @@ public class NodeToolRingTest extends TestBaseImpl
         
         Assertions.assertThat(tool.getStdout())
                   .contains("Datacenter: datacenter0")
-                  .contains("Address    Rack        Status State   Load            Owns                Token")
-                  .contains("127.0.0.1  rack0       Up     Normal")
-                  .contains("100.00%             9223372036854775807");
+                  .contains("Address         Rack        Status State   Load            Owns                Token")
+                  .contains("127.0.0.1       rack0       Up     Normal")
+                  .contains(" KiB      100.00%             9223372036854775807");
         assertEquals(0, tool.getExitCode());
         assertTrue(tool.getCleanedStderr().isEmpty());
     }
@@ -132,8 +132,8 @@ public class NodeToolRingTest extends TestBaseImpl
             Assertions.assertThat(tool.getStdout())
                       .contains("Datacenter: datacenter0")
                       .contains("Address         Rack        Status State   Load            Owns                Token")
-                      .contains("Unknown")
-                      .contains("100.00%             9223372036854775807");
+                      .contains("127.0.0.1:7012  rack0       Up     Normal")
+                      .contains(" KiB      100.00%             9223372036854775807");
             assertEquals(0, tool.getExitCode());
             assertTrue(tool.getCleanedStderr().isEmpty());
         });
@@ -146,10 +146,10 @@ public class NodeToolRingTest extends TestBaseImpl
             ToolResult tool = ToolRunner.invokeNodetoolJvmDtest(cluster.get(1), "ring", arg);
             Assertions.assertThat(tool.getStdout())
                       .contains("Datacenter: datacenter0")
-                      .contains("Address    Rack        Status State   Load            Owns                Token")
+                      .contains("Address         Rack        Status State   Load            Owns                Token")
                       .contains("localhost")
                       .contains("rack0       Up     Normal")
-                      .contains("100.00%             9223372036854775807");
+                      .contains(" KiB      100.00%             9223372036854775807");
             assertEquals(0, tool.getExitCode());
             assertTrue(tool.getCleanedStderr().isEmpty());
         });
