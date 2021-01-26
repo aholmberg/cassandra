@@ -31,7 +31,6 @@ import java.util.Map;
 import java.util.SortedMap;
 
 import org.apache.cassandra.locator.EndpointSnitchInfoMBean;
-import org.apache.cassandra.locator.InetAddressAndPort;
 import org.apache.cassandra.tools.NodeProbe;
 import org.apache.cassandra.tools.NodeTool;
 import org.apache.cassandra.tools.NodeTool.NodeToolCmd;
@@ -103,7 +102,7 @@ public class Status extends NodeToolCmd
 
             ArrayListMultimap<String, HostStatWithPort> hostToTokens = ArrayListMultimap.create();
             for (HostStatWithPort stat : dc.getValue())
-                hostToTokens.put(stat.endpointWithPort.getHostAddressAndPort(),stat);
+                hostToTokens.put(stat.endpointWithPort.getHostAddressAndPort(), stat);
 
             for (String endpoint : hostToTokens.keySet())
             {

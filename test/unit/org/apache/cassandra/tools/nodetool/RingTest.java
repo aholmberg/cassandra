@@ -34,16 +34,14 @@ import static org.hamcrest.Matchers.matchesPattern;
 import static org.junit.Assert.assertThat;
 
 @RunWith(OrderedJUnit4ClassRunner.class)
-public class StatusTest extends CQLTester
+public class RingTest extends CQLTester
 {
-    private static String localHostId;
     private static String token;
 
     @BeforeClass
     public static void setup() throws Exception
     {
         StorageService.instance.initServer();
-        localHostId = StorageService.instance.getLocalHostId();
         token = StorageService.instance.getTokens().get(0);
         startJMXServer();
     }
@@ -52,42 +50,43 @@ public class StatusTest extends CQLTester
      * Validate output, making sure the table mappings work with various host-modifying arguments in use.
      */
     @Test
-    public void testStatusOutput()
+    public void testRingOutput()
     {
         HostStatWithPort host = new HostStatWithPort(null, FBUtilities.getBroadcastAddressAndPort(), false, null);
-        validateStatusOutput(host.ipOrDns(false),
-                            "status");
-        validateStatusOutput(host.ipOrDns(true),
-                            "-pp", "status");
+        validateRingOutput(host.ipOrDns(false),
+                            "ring");
+        validateRingOutput(host.ipOrDns(true),
+                            "-pp", "ring");
         host = new HostStatWithPort(null, FBUtilities.getBroadcastAddressAndPort(), true, null);
-        validateStatusOutput(host.ipOrDns(false),
-                            "status", "-r");
-        validateStatusOutput(host.ipOrDns(true),
-                            "-pp", "status", "-r");
+        validateRingOutput(host.ipOrDns(false),
+                            "ring", "-r");
+        validateRingOutput(host.ipOrDns(true),
+                            "-pp", "ring", "-r");
     }
 
-    private void validateStatusOutput(String hostForm, String... args)
+    private void validateRingOutput(String hostForm, String... args)
     {
         ToolRunner.ToolResult nodetool = ToolRunner.invokeNodetool(args);
         nodetool.assertOnCleanExit();
         /**
+
          Datacenter: datacenter1
-         =======================
-         Status=Up/Down
-         |/ State=Normal/Leaving/Joining/Moving
-         --  Address    Load       Owns (effective)  Host ID                               Token                Rack
-         UN  localhost  45.71 KiB  100.0%            0b1b5e91-ad3b-444e-9c24-50578486978a  1849950853373272258  rack1
+         ==========
+         Address         Rack        Status State   Load            Owns                Token
+
+         127.0.0.1       rack1       Up     Normal  45.71 KiB       100.00%             4652409154190094022
+
          */
         String[] lines = nodetool.getStdout().split("\\R");
-        assertThat(lines[0].trim(), endsWith(SimpleSnitch.DATA_CENTER_NAME));
-        String hostStatus = lines[lines.length-1].trim();
-        assertThat(hostStatus, startsWith("UN"));
-        assertThat(hostStatus, containsString(hostForm));
-        assertThat(hostStatus, matchesPattern(".*\\d+\\.\\d+ KiB.*"));
-        assertThat(hostStatus, matchesPattern(".*\\d+\\.\\d+%.*"));
-        assertThat(hostStatus, containsString(localHostId));
-        assertThat(hostStatus, containsString(token));
-        assertThat(hostStatus, endsWith(SimpleSnitch.RACK_NAME));
-        assertThat(hostStatus, not(containsString("?")));
+        assertThat(lines[1].trim(), endsWith(SimpleSnitch.DATA_CENTER_NAME));
+        String hostRing = lines[lines.length-4].trim(); // this command has a couple extra newlines and an empty error message at the end. Not messing with it.
+        assertThat(hostRing, startsWith(hostForm));
+        assertThat(hostRing, containsString(SimpleSnitch.RACK_NAME));
+        assertThat(hostRing, containsString("Up"));
+        assertThat(hostRing, containsString("Normal"));
+        assertThat(hostRing, matchesPattern(".*\\d+\\.\\d+ KiB.*"));
+        assertThat(hostRing, matchesPattern(".*\\d+\\.\\d+%.*"));
+        assertThat(hostRing, endsWith(token));
+        assertThat(hostRing, not(containsString("?")));
     }
 }
