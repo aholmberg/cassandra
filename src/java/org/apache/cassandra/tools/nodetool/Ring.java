@@ -23,7 +23,6 @@ import io.airlift.airline.Command;
 import io.airlift.airline.Option;
 
 import java.io.PrintStream;
-import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
@@ -34,7 +33,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.cassandra.cql3.CQL3Type;
 import org.apache.cassandra.locator.EndpointSnitchInfoMBean;
 import org.apache.cassandra.tools.NodeProbe;
 import org.apache.cassandra.tools.NodeTool;
@@ -77,14 +75,8 @@ public class Ring extends NodeToolCmd
             endpointsToTokens.put(entry.getValue(), entry.getKey());
         }
 
-        int maxAddressLength = Collections.max(endpointsToTokens.keys(), new Comparator<String>()
-        {
-            @Override
-            public int compare(String first, String second)
-            {
-                return Integer.compare(first.length(), second.length());
-            }
-        }).length();
+        int maxAddressLength = Collections.max(endpointsToTokens.keys(),
+                                               Comparator.comparingInt(String::length)).length();
 
         String formatPlaceholder = "%%-%ds  %%-12s%%-7s%%-8s%%-16s%%-20s%%-44s%%n";
         String format = format(formatPlaceholder, maxAddressLength);
@@ -112,7 +104,7 @@ public class Ring extends NodeToolCmd
 
         out.println();
         for (Entry<String, SetHostStatWithPort> entry : NodeTool.getOwnershipByDcWithPort(probe, resolveIp, tokensToEndpoints, ownerships).entrySet())
-            printDc(probe, format, entry.getKey(), endpointsToTokens, entry.getValue(), showEffectiveOwnership);
+            printDc(format, entry.getKey(), endpointsToTokens, entry.getValue(), showEffectiveOwnership);
 
         if (haveVnodes)
         {
@@ -123,8 +115,7 @@ public class Ring extends NodeToolCmd
         out.printf("%n  " + errors.toString());
     }
 
-    private void printDc(NodeProbe probe, String format,
-                         String dc,
+    private void printDc(String format, String dc,
                          LinkedHashMultimap<String, String> endpointsToTokens,
                          SetHostStatWithPort hoststats, boolean showEffectiveOwnership)
     {

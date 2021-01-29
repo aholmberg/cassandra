@@ -10,6 +10,7 @@
  * SSLFactory should initialize SSLContext before setting protocols (CASSANDRA-16362)
  * Restore sasi dependencies jflex, snowball-stemmer, and concurrent-trees, in the cassandra-all pom (CASSANDRA-16303)
  * Fix DecimalDeserializer#toString OOM (CASSANDRA-14925)
+ * Fix nodetool ring, status output when DNS resolution or port printing are in use (CASSANDRA-16283)
 Merged from 3.11:
  * Fix digest computation for queries with fetched but non queried columns (CASSANDRA-15962)
  * Reduce amount of allocations during batch statement execution (CASSANDRA-16201)
@@ -18,7 +19,7 @@ Merged from 3.0:
  * Prevent unbounded number of pending flushing tasks (CASSANDRA-16261)
  * Improve empty hint file handling during startup (CASSANDRA-16162)
  * Fix skipping on pre-3.0 created compact storage sstables due to missing primary key liveness (CASSANDRA-16226)
- * Allow empty string in collections with COPY FROM in cqlsh (CASSANDRA-16372
+ * Allow empty string in collections with COPY FROM in cqlsh (CASSANDRA-16372)
 
 4.0-beta4
  * DROP COMPACT STORAGE should invalidate prepared statements still using CompactTableMetadata (CASSANDRA-16361)

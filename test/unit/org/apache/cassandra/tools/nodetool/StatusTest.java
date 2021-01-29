@@ -70,7 +70,7 @@ public class StatusTest extends CQLTester
     {
         ToolRunner.ToolResult nodetool = ToolRunner.invokeNodetool(args);
         nodetool.assertOnCleanExit();
-        /**
+        /*
          Datacenter: datacenter1
          =======================
          Status=Up/Down
