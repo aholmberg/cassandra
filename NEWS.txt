@@ -124,6 +124,7 @@ New features
 
 Upgrading
 ---------
+    - cqlsh shell startup script now prefers 'python3' before 'python' when identifying a runtime.
     - Native protocol v5 is promoted from beta in this release. The wire format has changed
       significantly and users should take care to ensure client drivers are upgraded to a version
       with support for the final v5 format, if currently connecting over v5-beta. (CASSANDRA-15299)
@@ -284,6 +285,7 @@ Deprecation
     - The JMX MBean org.apache.cassandra.db:type=BlacklistedDirectories has been
       deprecated in favor of org.apache.cassandra.db:type=DisallowedDirectories
       and will be removed in a subsequent major version.
+    - cqlsh support of 2.7 is deprecated and will warn when running with Python 2.7.
 
 Materialized Views
 -------------------
