@@ -16,21 +16,20 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.distributed.api;
+package org.apache.cassandra.tools;
 
-import org.apache.cassandra.locator.InetAddressAndPort;
+import java.io.PrintStream;
 
-import java.util.stream.Stream;
-
-public interface ICluster
+public class Output
 {
+    public final static Output CONSOLE = new Output(System.out, System.err);
 
-    IInstance get(int i);
-    IInstance get(InetAddressAndPort endpoint);
-    int size();
-    Stream<? extends IInstance> stream();
-    Stream<? extends IInstance> stream(String dcName);
-    Stream<? extends IInstance> stream(String dcName, String rackName);
-    IMessageFilters filters();
+    public final PrintStream out;
+    public final PrintStream err;
 
+    public Output(PrintStream out, PrintStream err)
+    {
+        this.out = out;
+        this.err = err;
+    }
 }

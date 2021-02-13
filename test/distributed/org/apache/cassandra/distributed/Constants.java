@@ -16,22 +16,19 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.distributed.api;
+package org.apache.cassandra.distributed;
 
-import java.io.Serializable;
-
-import org.apache.cassandra.locator.InetAddressAndPort;
-
-/**
- * A cross-version interface for delivering internode messages via message sinks.
- *
- * Message implementations should be serializable so we could load into instances.
- */
-public interface IMessage extends Serializable
+public final class Constants
 {
-    int verb();
-    byte[] bytes();
-    int id();
-    int version();
-    InetAddressAndPort from();
+    /**
+     * Property defined in {@link org.apache.cassandra.distributed.api.IInstanceConfig} which references the ID of the
+     * {@link org.apache.cassandra.distributed.api.ICluster}.
+     */
+    public static final String KEY_DTEST_API_CLUSTER_ID = "dtest.api.cluster_id";
+
+    /**
+     * Property used by Instances to determine if checking YAML configuration is required; set to false if validation
+     * of the YAML is not desired.
+     */
+    public static final String KEY_DTEST_API_CONFIG_CHECK = "dtest.api.config.check";
 }

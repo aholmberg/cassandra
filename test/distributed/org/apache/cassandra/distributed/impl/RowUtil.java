@@ -28,10 +28,32 @@ import com.datastax.driver.core.ResultSet;
 import com.datastax.driver.core.Row;
 import org.apache.cassandra.cql3.ColumnSpecification;
 import org.apache.cassandra.cql3.UntypedResultSet;
+import org.apache.cassandra.distributed.api.QueryResults;
+import org.apache.cassandra.distributed.api.SimpleQueryResult;
 import org.apache.cassandra.transport.messages.ResultMessage;
 
 public class RowUtil
 {
+    public static SimpleQueryResult toQueryResult(ResultMessage res)
+    {
+        if (res != null && res.kind == ResultMessage.Kind.ROWS)
+        {
+            ResultMessage.Rows rows = (ResultMessage.Rows) res;
+            String[] names = getColumnNames(rows.result.metadata.names);
+            Object[][] results = RowUtil.toObjects(rows);
+            return new SimpleQueryResult(names, results);
+        }
+        else
+        {
+            return QueryResults.empty();
+        }
+    }
+
+    public static String[] getColumnNames(List<ColumnSpecification> names)
+    {
+        return names.stream().map(c -> c.name.toString()).toArray(String[]::new);
+    }
+
     public static Object[][] toObjects(ResultMessage.Rows rows)
     {
         Object[][] result = new Object[rows.result.rows.size()][];
@@ -51,6 +73,11 @@ public class RowUtil
         return result;
     }
 
+    public static Iterator<Object[]> toObjects(UntypedResultSet rs)
+    {
+        return toObjects(rs.metadata(), rs.iterator());
+    }
+
     public static Iterator<Object[]> toObjects(List<ColumnSpecification> columnSpecs, Iterator<UntypedResultSet.Row> rs)
     {
         return Iterators.transform(rs,
@@ -60,8 +87,10 @@ public class RowUtil
                                        {
                                            ColumnSpecification columnSpec = columnSpecs.get(i);
                                            ByteBuffer bb = row.getBytes(columnSpec.name.toString());
+
                                            if (bb != null)
                                                objectRow[i] = columnSpec.type.getSerializer().deserialize(bb);
+
                                        }
                                        return objectRow;
                                    });

@@ -15,15 +15,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.db;
 
-import java.io.File;
-import java.util.Set;
+package org.apache.cassandra.distributed.impl;
 
-public interface BlacklistedDirectoriesMBean {
+import java.util.Objects;
 
-    public Set<File> getUnreadableDirectories();
-    
-    public Set<File> getUnwritableDirectories();
-    
+import ch.qos.logback.core.PropertyDefinerBase;
+
+/**
+ * Used by logback to find/define property value, see logback-dtest.xml
+ */
+public class ClusterIDDefiner extends PropertyDefinerBase
+{
+    private static volatile String ID = "<main>";
+
+    public static void setId(String id)
+    {
+        ID = Objects.requireNonNull(id);
+    }
+
+    public static String getId()
+    {
+        return ID;
+    }
+
+    @Override
+    public String getPropertyValue()
+    {
+        return ID;
+    }
 }

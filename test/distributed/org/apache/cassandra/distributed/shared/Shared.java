@@ -16,13 +16,22 @@
  * limitations under the License.
  */
 
-package org.apache.cassandra.distributed.api;
+package org.apache.cassandra.distributed.shared;
 
-public interface IListen
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/**
+ * Tells jvm-dtest that a class should be shared accross all {@link ClassLoader}s.
+ *
+ * Jvm-dtest relies on classloader isolation to run multiple cassandra instances in the same JVM, this makes it
+ * so some classes do not get shared (outside a blesssed set of classes/packages). When the default behavior
+ * is not desirable, this annotation will tell jvm-dtest to share the class accross all class loaders.
+ */
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ ElementType.TYPE })
+public @interface Shared
 {
-    public interface Cancel { void cancel(); }
-
-    Cancel schema(Runnable onChange);
-
-    Cancel liveMembers(Runnable onChange);
 }

@@ -15,10 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.cassandra.db;
 
-package org.apache.cassandra.distributed.api;
+import java.io.File;
+import java.util.Set;
 
-public enum Feature
+public interface DisallowedDirectoriesMBean
 {
-    NETWORK, GOSSIP, NATIVE_PROTOCOL
+
+    public Set<File> getUnreadableDirectories();
+    
+    public Set<File> getUnwritableDirectories();
+    
 }
