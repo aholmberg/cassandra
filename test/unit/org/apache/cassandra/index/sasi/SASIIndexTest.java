@@ -84,7 +84,6 @@ import org.apache.cassandra.utils.FBUtilities;
 import org.apache.cassandra.utils.Pair;
 
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
 
@@ -163,7 +162,7 @@ public class SASIIndexTest
         assertRows(rows, "key4");
 
         rows = getIndexed(store, 10, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("aw")));
-        Assert.assertEquals(rows.toString(), 0, rows.size());
+        assertRowsSize(rows, 0);
 
         rows = getIndexed(store, 10, buildExpression(firstName, Operator.LIKE_SUFFIX, UTF8Type.instance.decompose("avel")));
         assertRows(rows, "key1", "key2", "key3");
@@ -178,7 +177,7 @@ public class SASIIndexTest
         assertRows(rows, "key2");
 
         rows = getIndexed(store, 10, buildExpression(age, Operator.EQ, Int32Type.instance.decompose(13)));
-        Assert.assertEquals(rows.toString(), 0, rows.size());
+        assertRowsSize(rows, 0);
     }
 
     @Test
@@ -345,7 +344,7 @@ public class SASIIndexTest
         rows = getIndexed(store, 5,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
 
-        Assert.assertEquals(rows.toString(), 5, rows.size());
+        assertRowsSize(rows, 5);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")),
@@ -370,13 +369,13 @@ public class SASIIndexTest
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")),
                           buildExpression(age, Operator.GT, Int32Type.instance.decompose(10)));
 
-        Assert.assertEquals(rows.toString(), 10, rows.size());
+        assertRowsSize(rows, 10);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")),
                           buildExpression(age, Operator.LTE, Int32Type.instance.decompose(50)));
 
-        Assert.assertEquals(rows.toString(), 10, rows.size());
+        assertRowsSize(rows, 10);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_SUFFIX, UTF8Type.instance.decompose("ie")),
@@ -427,12 +426,12 @@ public class SASIIndexTest
                         UTF8Type.instance.decompose("What you get by achieving your goals")),
                 buildExpression(age, Operator.GT, Int32Type.instance.decompose(32)));
 
-        Assert.assertEquals(rows.toString(), Collections.singleton("key1"), rows);
+        assertRows(rows, "key1");
 
         rows = getIndexed(store, 10,
                 buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("do it.")));
 
-        Assert.assertEquals(rows.toString(), Arrays.asList("key0", "key1"), Lists.newArrayList(rows));
+        assertRows(rows, "key0", "key1");
     }
 
     @Test
@@ -524,7 +523,7 @@ public class SASIIndexTest
         rows = getIndexed(store, 5,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
 
-        Assert.assertEquals(rows.toString(), 5, rows.size());
+        assertRowsSize(rows, 5);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")),
@@ -563,23 +562,23 @@ public class SASIIndexTest
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_MATCHES, UTF8Type.instance.decompose("Demario")),
                           buildExpression(age, Operator.LTE, Int32Type.instance.decompose(30)));
-        Assert.assertEquals(rows.toString(), 0, rows.size());
+        assertRowsSize(rows, 0);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_MATCHES, UTF8Type.instance.decompose("Josephine")));
-        Assert.assertEquals(rows.toString(), 0, rows.size());
+        assertRowsSize(rows, 0);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")),
                           buildExpression(age, Operator.GT, Int32Type.instance.decompose(10)));
 
-        Assert.assertEquals(rows.toString(), 10, rows.size());
+        assertRowsSize(rows, 10);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")),
                           buildExpression(age, Operator.LTE, Int32Type.instance.decompose(50)));
 
-        Assert.assertEquals(rows.toString(), 10, rows.size());
+        assertRowsSize(rows, 10);
 
         rows = getIndexed(store, 10,
                           buildExpression(firstName, Operator.LIKE_SUFFIX, UTF8Type.instance.decompose("ie")),
@@ -943,11 +942,11 @@ public class SASIIndexTest
         final ByteBuffer firstName = UTF8Type.instance.decompose("first_name");
 
         Set<String> rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 6, rows.size());
+        assertRowsSize(rows, 6);
 
         loadData(part4, 4000, true);
         rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 8, rows.size());
+        assertRowsSize(rows, 8);
 
         loadData(part5, 5000, true);
 
@@ -1027,28 +1026,28 @@ public class SASIIndexTest
         final ByteBuffer firstName = UTF8Type.instance.decompose("first_name");
 
         Set<String> rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 16, rows.size());
+        assertRowsSize(rows, 16);
 
         // make sure we don't prematurely delete anything
         store.indexManager.truncateAllIndexesBlocking(500);
 
         rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 16, rows.size());
+        assertRowsSize(rows, 16);
 
         store.indexManager.truncateAllIndexesBlocking(1500);
 
         rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 10, rows.size());
+        assertRowsSize(rows, 10);
 
         store.indexManager.truncateAllIndexesBlocking(2500);
 
         rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 6, rows.size());
+        assertRowsSize(rows, 6);
 
         store.indexManager.truncateAllIndexesBlocking(3500);
 
         rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 0, rows.size());
+        assertRowsSize(rows, 0);
 
         // add back in some data just to make sure it all still works
         Map<String, Pair<String, Integer>> part4 = new HashMap<String, Pair<String, Integer>>()
@@ -1060,7 +1059,7 @@ public class SASIIndexTest
         loadData(part4, 4000, true);
 
         rows = getIndexed(store, 100, buildExpression(firstName, Operator.LIKE_CONTAINS, UTF8Type.instance.decompose("a")));
-        Assert.assertEquals(rows.toString(), 1, rows.size());
+        assertRowsSize(rows, 1);
     }
 
 
@@ -2733,6 +2732,13 @@ public class SASIIndexTest
 
     private static void assertRows(Iterable<String> actual, String... expected)
     {
-        Assert.assertArrayEquals(expected, Iterables.toArray(actual, String.class));
+        String message = String.format("Expected rows to contain %s but found %s", Arrays.toString(expected), actual);
+        Assert.assertArrayEquals(message, expected, Iterables.toArray(actual, String.class));
+    }
+
+    private static void assertRowsSize(Set<String> actual, int expectedSize)
+    {
+        String message = String.format("Expected %s to have size %d but found size %d", actual, expectedSize, actual.size());
+        Assert.assertEquals(message, expectedSize, actual.size());
     }
 }
