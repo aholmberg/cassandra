@@ -32,6 +32,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.cassandra.SchemaLoader;
 import org.apache.cassandra.cql3.CQLTester;
@@ -123,7 +124,7 @@ public class SASIIndexTest
     @Before
     public void cleanUp()
     {
-        Keyspace.open(KS_NAME).getColumnFamilyStore(CF_NAME).truncateBlocking();
+        cleanupData();
     }
 
     @Test
@@ -2522,11 +2523,15 @@ public class SASIIndexTest
         return store;
     }
 
-    private void cleanupData()
+    private static void cleanupData()
+    {
+        stores().forEach(ColumnFamilyStore::truncateBlocking);
+    }
+
+    private static Stream<ColumnFamilyStore> stores()
     {
         Keyspace ks = Keyspace.open(KS_NAME);
-        ks.getColumnFamilyStore(CF_NAME).truncateBlocking();
-        ks.getColumnFamilyStore(CLUSTERING_CF_NAME_1).truncateBlocking();
+        return ks.getMetadata().tables.stream().map(t -> ks.getColumnFamilyStore(t.name));
     }
 
     private static Set<String> getIndexed(ColumnFamilyStore store, int maxResults, Expression... expressions)
