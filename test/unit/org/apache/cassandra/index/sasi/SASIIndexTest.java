@@ -1178,32 +1178,6 @@ public class SASIIndexTest
     }
 
     @Test
-    public void testInsertingIncorrectValuesIntoAgeIndex()
-    {
-        ColumnFamilyStore store = Keyspace.open(KS_NAME).getColumnFamilyStore(CF_NAME);
-
-        final ByteBuffer firstName = UTF8Type.instance.decompose("first_name");
-        final ByteBuffer age = UTF8Type.instance.decompose("age");
-
-        Mutation.PartitionUpdateCollector rm = new Mutation.PartitionUpdateCollector(KS_NAME, decoratedKey(AsciiType.instance.decompose("key1")));
-        update(rm, new ArrayList<Cell<?>>()
-        {{
-            add(buildCell(age, LongType.instance.decompose(26L), 1000));
-            add(buildCell(firstName, AsciiType.instance.decompose("pavel"), 1000));
-        }});
-        rm.build().apply();
-
-        store.forceBlockingFlush();
-
-        Set<String> rows = getIndexed(store, 10, buildExpression(firstName, Operator.EQ, UTF8Type.instance.decompose("a")),
-                                                 buildExpression(age, Operator.GTE, Int32Type.instance.decompose(26)));
-
-        // index is expected to have 0 results because age value was of wrong type
-        Assert.assertEquals(0, rows.size());
-    }
-
-
-    @Test
     public void testUnicodeSupport()
     {
         testUnicodeSupport(false);
