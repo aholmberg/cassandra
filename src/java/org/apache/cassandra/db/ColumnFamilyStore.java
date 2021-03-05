@@ -495,6 +495,17 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
         return directories;
     }
 
+    public List<String> getDataPaths() throws IOException
+    {
+        List<String> dataPaths = new ArrayList<>();
+        for (File dataPath : directories.getCFDirectories())
+        {
+            dataPaths.add(dataPath.getCanonicalPath());
+        }
+
+        return dataPaths;
+    }
+
     public SSTableMultiWriter createSSTableMultiWriter(Descriptor descriptor, long keyCount, long repairedAt, UUID pendingRepair, boolean isTransient, int sstableLevel, SerializationHeader header, LifecycleNewTracker lifecycleNewTracker)
     {
         MetadataCollector collector = new MetadataCollector(metadata().comparator).sstableLevel(sstableLevel);
@@ -709,7 +720,7 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
     /**
      * #{@inheritDoc}
      */
-    public synchronized List<String> importNewSSTables(Set<String> srcPaths, boolean resetLevel, boolean clearRepaired, boolean verifySSTables, boolean verifyTokens, boolean invalidateCaches, boolean extendedVerify)
+    public synchronized List<String> importNewSSTables(Set<String> srcPaths, boolean resetLevel, boolean clearRepaired, boolean verifySSTables, boolean verifyTokens, boolean invalidateCaches, boolean extendedVerify, boolean copyData)
     {
         SSTableImporter.Options options = SSTableImporter.Options.options(srcPaths)
                                                                  .resetLevel(resetLevel)
@@ -717,9 +728,15 @@ public class ColumnFamilyStore implements ColumnFamilyStoreMBean
                                                                  .verifySSTables(verifySSTables)
                                                                  .verifyTokens(verifyTokens)
                                                                  .invalidateCaches(invalidateCaches)
-                                                                 .extendedVerify(extendedVerify).build();
+                                                                 .extendedVerify(extendedVerify)
+                                                                 .copyData(copyData).build();
 
         return sstableImporter.importNewSSTables(options);
+    }
+
+    public List<String> importNewSSTables(Set<String> srcPaths, boolean resetLevel, boolean clearRepaired, boolean verifySSTables, boolean verifyTokens, boolean invalidateCaches, boolean extendedVerify)
+    {
+        return importNewSSTables(srcPaths, resetLevel, clearRepaired, verifySSTables, verifyTokens, invalidateCaches, extendedVerify, false);
     }
 
     Descriptor getUniqueDescriptorFor(Descriptor descriptor, File targetDirectory)
