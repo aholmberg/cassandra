@@ -58,8 +58,6 @@ class TestCqlshOutput(BaseTestCase):
             env['LC_CTYPE'] = 'en_US.utf8'
         else:
             env['LC_CTYPE'] = os.environ.get('LC_CTYPE', 'en_US.utf8')
-        if ('PATH' in os.environ.keys()):
-            env['PATH'] = os.environ['PATH']
         self.default_env = env
 
     def tearDown(self):
