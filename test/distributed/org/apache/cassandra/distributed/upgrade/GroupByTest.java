@@ -29,31 +29,34 @@ import static org.apache.cassandra.distributed.api.Feature.NETWORK;
 import static org.apache.cassandra.distributed.shared.AssertUtils.assertRows;
 import static org.apache.cassandra.distributed.shared.AssertUtils.row;
 
-public class GoupByTest extends UpgradeTestBase
+public class GroupByTest extends UpgradeTestBase
 {
     @Test
     public void testReads() throws Throwable
     {
+        // CASSANDRA-16582: group-by across mixed version cluster would fail with ArrayIndexOutOfBoundException
         new UpgradeTestBase.TestCase()
         .nodes(2)
-        .upgrade(Versions.Major.v3X)
+        .upgrade(Versions.Major.v3X, Versions.Major.v4)
         .nodesToUpgrade(1)
-        .withConfig(config -> config.with(GOSSIP, NETWORK, NATIVE_PROTOCOL))
-        .setup(c -> c.schemaChange(withKeyspace("CREATE TABLE %s.t (a int, b int, c int, v int, primary key (a, b, c))")))
-        .setup((cluster) -> {
-
-            // insert rows internally in each node
+        .withConfig(config -> config.with(GOSSIP, NETWORK))
+        .setup(cluster -> {
+            cluster.schemaChange(withKeyspace("CREATE TABLE %s.t (a int, b int, c int, v int, primary key (a, b, c))"));
             String insert = withKeyspace("INSERT INTO %s.t (a, b, c, v) VALUES (?, ?, ?, ?)");
             cluster.coordinator(1).execute(insert, ConsistencyLevel.ALL, 1, 1, 1, 3);
             cluster.coordinator(1).execute(insert, ConsistencyLevel.ALL, 1, 2, 1, 6);
             cluster.coordinator(1).execute(insert, ConsistencyLevel.ALL, 1, 2, 2, 12);
             cluster.coordinator(1).execute(insert, ConsistencyLevel.ALL, 1, 3, 2, 12);
-
-
-            // query to trigger read repair
-            String query = withKeyspace("SELECT a, b, count(c) FROM %s.t");
-            assertRows(cluster.coordinator(1).execute(query, ConsistencyLevel.ALL), row(1, 1, 1), row(1, 2, 2), row(1, 3, 1));
-            assertRows(cluster.coordinator(2).execute(query, ConsistencyLevel.ALL), row(1, 1, 1), row(1, 2, 2), row(1, 3, 1));
+        })
+        .runAfterNodeUpgrade((cluster, node) -> {
+            String query = withKeyspace("SELECT a, b, count(c) FROM %s.t GROUP BY a,b");
+            Object[][] expectedResult = {
+            row(1, 1, 1L),
+            row(1, 2, 2L),
+            row(1, 3, 1L)
+            };
+            assertRows(cluster.coordinator(1).execute(query, ConsistencyLevel.ALL), expectedResult);
+            assertRows(cluster.coordinator(2).execute(query, ConsistencyLevel.ALL), expectedResult);
         })
         .run();
     }
