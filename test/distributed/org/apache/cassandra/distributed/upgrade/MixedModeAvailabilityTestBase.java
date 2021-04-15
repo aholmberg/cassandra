@@ -18,28 +18,24 @@
 
 package org.apache.cassandra.distributed.upgrade;
 
-import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import com.google.common.util.concurrent.Uninterruptibles;
 
 import org.apache.cassandra.distributed.api.ConsistencyLevel;
 import org.apache.cassandra.distributed.api.ICoordinator;
-import org.apache.cassandra.distributed.api.IInstance;
-import org.apache.cassandra.distributed.api.NodeToolResult;
 import org.apache.cassandra.distributed.shared.Versions;
-import org.apache.cassandra.exceptions.UnavailableException;
+import org.apache.cassandra.exceptions.ReadTimeoutException;
+import org.apache.cassandra.exceptions.WriteTimeoutException;
+import org.apache.cassandra.net.Verb;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.cassandra.distributed.api.ConsistencyLevel.ALL;
 import static org.apache.cassandra.distributed.api.ConsistencyLevel.ONE;
 import static org.apache.cassandra.distributed.api.ConsistencyLevel.QUORUM;
-import static org.apache.cassandra.distributed.api.Feature.GOSSIP;
-import static org.apache.cassandra.distributed.api.Feature.NETWORK;
 import static org.apache.cassandra.distributed.shared.AssertUtils.assertRows;
 import static org.apache.cassandra.distributed.shared.AssertUtils.row;
+import static org.apache.cassandra.net.Verb.READ_REQ;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static java.lang.String.format;
@@ -67,7 +63,8 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
         .nodes(NUM_NODES)
         .nodesToUpgrade(upgradedCoordinator ? 1 : 2)
         .upgrade(initial, upgrade)
-        .withConfig(config -> config.with(NETWORK, GOSSIP))
+        .withConfig(config -> config.set("read_request_timeout_in_ms", SECONDS.toMillis(2))
+                                    .set("write_request_timeout_in_ms", SECONDS.toMillis(2)))
         .setup(c -> c.schemaChange(withKeyspace("CREATE TABLE %s.t (k uuid, c int, v int, PRIMARY KEY (k, c))")))
         .runAfterNodeUpgrade((cluster, n) -> {
 
@@ -76,7 +73,10 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
             {
                 // disable communications to the down nodes
                 if (numNodesDown > 0)
-                    shutDownWaitForStatus(cluster.get(COORDINATOR), cluster.get(replica(COORDINATOR, numNodesDown)));
+                {
+                    cluster.filters().outbound().verbs(READ_REQ.id).to(replica(COORDINATOR, numNodesDown)).drop();
+                    cluster.filters().outbound().verbs(Verb.MUTATION_REQ.id).to(replica(COORDINATOR, numNodesDown)).drop();
+                }
 
                 // run the test cases that are compatible with the number of down nodes
                 ICoordinator coordinator = cluster.coordinator(COORDINATOR);
@@ -84,23 +84,6 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
                     tester.test(coordinator, numNodesDown, upgradedCoordinator);
             }
         }).run();
-    }
-
-    private static void shutDownWaitForStatus(IInstance observer, IInstance toBeDown) throws Throwable
-    {
-        InetSocketAddress downNodeAddress = toBeDown.broadcastAddress();
-        toBeDown.shutdown().get();
-        while (!nodeIsDownInStatusResult(downNodeAddress.getAddress().getHostAddress(), observer.nodetoolResult("status")))
-            Uninterruptibles.sleepUninterruptibly(500, TimeUnit.MILLISECONDS);
-    }
-
-    private static boolean nodeIsDownInStatusResult(String node, NodeToolResult result)
-    {
-        String[] lines = result.getStdout().split("\n");
-        return Arrays.stream(lines).anyMatch(line -> {
-            String[] tokens = line.split("\\s+");
-            return tokens.length > 1 && tokens[1].equals(node) && tokens[0].equals("DN");
-        });
     }
 
     private static int replica(int node, int depth)
@@ -133,7 +116,7 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
             try
             {
                 // test write
-                maybeFailUnavailable(numNodesDown > maxNodesDown(writeConsistencyLevel), () -> {
+                maybeFail(WriteTimeoutException.class, numNodesDown > maxNodesDown(writeConsistencyLevel), () -> {
                     coordinator.execute(INSERT, writeConsistencyLevel, row1);
                     coordinator.execute(INSERT, writeConsistencyLevel, row2);
                 });
@@ -141,7 +124,7 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
                 wrote = true;
 
                 // test read
-                maybeFailUnavailable(numNodesDown > maxNodesDown(readConsistencyLevel), () -> {
+                maybeFail(ReadTimeoutException.class, numNodesDown > maxNodesDown(readConsistencyLevel), () -> {
                     Object[][] rows = coordinator.execute(SELECT, readConsistencyLevel, key);
                     if (numNodesDown <= maxNodesDown(writeConsistencyLevel))
                         assertRows(rows, row1, row2);
@@ -158,7 +141,7 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
             }
         }
 
-        private static void maybeFailUnavailable(boolean shouldFail, Runnable test)
+        private static <E extends Exception> void maybeFail(Class<E> exceptionClass, boolean shouldFail, Runnable test)
         {
             try
             {
@@ -173,7 +156,7 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
                     className = e.getCause().getClass().getCanonicalName();
 
                 if (shouldFail)
-                    assertEquals(UnavailableException.class.getCanonicalName(), className);
+                    assertEquals(exceptionClass.getCanonicalName(), className);
                 else
                     throw e;
             }
@@ -190,7 +173,7 @@ public class MixedModeAvailabilityTestBase extends UpgradeTestBase
             if (cl == ALL)
                 return 0;
 
-            throw new IllegalArgumentException("Usupported consistency level: " + cl);
+            throw new IllegalArgumentException("Unsupported consistency level: " + cl);
         }
     }
 }
