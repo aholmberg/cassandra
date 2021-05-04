@@ -56,8 +56,6 @@ class CqlshCompletionCase(BaseTestCase):
         env['COLUMNS'] = '100000'
         if (locale.getpreferredencoding() != 'UTF-8'):
              env['LC_CTYPE'] = 'en_US.utf8'
-        if ('PATH' in os.environ.keys()):
-            env['PATH'] = os.environ['PATH']
         self.cqlsh_runner = testrun_cqlsh(cqlver=None, env=env)
         self.cqlsh = self.cqlsh_runner.__enter__()
 
@@ -698,10 +696,7 @@ class TestCqlshCompletion(CqlshCompletionCase):
         self.trycompletions('CREATE TA', immediate='BLE ')
         self.create_columnfamily_table_template('TABLE')
 
-    def test_complete_in_describe(self):
-        """
-        Tests for Cassandra-10733
-        """
+    def test_complete_in_describe(self):  # Cassandra-10733
         self.trycompletions('DES', immediate='C')
         # quoted_keyspace = '"' + self.cqlsh.keyspace + '"'
         self.trycompletions('DESCR', immediate='IBE ')
