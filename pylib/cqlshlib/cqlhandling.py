@@ -19,7 +19,6 @@
 
 import traceback
 
-from cassandra.metadata import cql_keywords_reserved
 from cqlshlib import pylexotron, util
 
 Hint = pylexotron.Hint
@@ -51,14 +50,24 @@ class CqlParsingRuleSet(pylexotron.ParsingRuleSet):
 
         # note: commands_end_with_newline may be extended by callers.
         self.commands_end_with_newline = set()
-        self.set_reserved_keywords(cql_keywords_reserved)
+        self.set_reserved_keywords()
 
-    def set_reserved_keywords(self, keywords):
+    def set_reserved_keywords(self):
         """
         We cannot let resreved cql keywords be simple 'identifier' since this caused
         problems with completion, see CASSANDRA-10415
         """
-        syntax = '<reserved_identifier> ::= /(' + '|'.join(r'\b{}\b'.format(k) for k in keywords) + ')/ ;'
+        # CASSANDRA-16659 - to keep things compact cql_keywords_reserved will not be imported from the drivers anymore
+        cql_keywords_reserved = set((
+            'authorize', 'rename', 'set', 'revoke', 'into', 'describe', 'primary', 'replace', 'columnfamily', 'apply',
+            'table', 'null', 'select', 'if', 'index', 'use', 'from', 'and', 'unlogged', 'create', 'nan', 'to', 'add',
+            'alter', 'schema', 'begin', 'full', 'infinity', 'grant', 'truncate', 'on', 'modify', 'mbeans', 'update',
+            'asc', 'mbean', 'entries', 'not', 'using', 'with', 'by', 'is', 'desc', 'insert', 'execute', 'in', 'default',
+            'materialized', 'drop', 'batch', 'order', 'keyspace', 'token', 'limit', 'allow', 'of', 'norecursive', 'delete',
+            'where', 'or', 'unset', 'view'
+        ))
+
+        syntax = '<reserved_identifier> ::= /(' + '|'.join(r'\b{}\b'.format(k) for k in cql_keywords_reserved) + ')/ ;'
         self.append_rules(syntax)
 
     def completer_for(self, rulename, symname):
