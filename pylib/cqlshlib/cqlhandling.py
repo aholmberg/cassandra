@@ -25,12 +25,12 @@ Hint = pylexotron.Hint
 
 # CASSANDRA-16659 - to keep things compact cql_keywords_reserved will not be imported from the drivers anymore
 cql_reserved_keywords = set((
-    'authorize', 'rename', 'set', 'revoke', 'into', 'describe', 'primary', 'replace', 'columnfamily', 'apply',
+    'authorize', 'rename', 'set', 'revoke', 'into', 'describe', 'primary', 'columnfamily', 'apply',
     'table', 'null', 'select', 'if', 'index', 'use', 'from', 'and', 'unlogged', 'create', 'nan', 'to', 'add',
-    'alter', 'schema', 'begin', 'full', 'infinity', 'grant', 'truncate', 'on', 'modify', 'mbeans', 'update',
-    'asc', 'mbean', 'entries', 'not', 'using', 'with', 'by', 'is', 'desc', 'insert', 'execute', 'in', 'default',
+    'alter', 'schema', 'begin', 'full', 'infinity', 'grant', 'truncate', 'on', 'modify', 'update',
+    'asc', 'entries', 'not', 'using', 'with', 'by', 'is', 'desc', 'insert', 'execute', 'in',
     'materialized', 'drop', 'batch', 'order', 'keyspace', 'token', 'limit', 'allow', 'of', 'norecursive', 'delete',
-    'where', 'or', 'unset', 'view'
+    'where', 'or', 'view'
 ))
 
 
