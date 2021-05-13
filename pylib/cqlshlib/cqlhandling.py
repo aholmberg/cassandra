@@ -23,6 +23,16 @@ from cqlshlib import pylexotron, util
 
 Hint = pylexotron.Hint
 
+# CASSANDRA-16659 - to keep things compact cql_keywords_reserved will not be imported from the drivers anymore
+cql_reserved_keywords = set((
+    'authorize', 'rename', 'set', 'revoke', 'into', 'describe', 'primary', 'replace', 'columnfamily', 'apply',
+    'table', 'null', 'select', 'if', 'index', 'use', 'from', 'and', 'unlogged', 'create', 'nan', 'to', 'add',
+    'alter', 'schema', 'begin', 'full', 'infinity', 'grant', 'truncate', 'on', 'modify', 'mbeans', 'update',
+    'asc', 'mbean', 'entries', 'not', 'using', 'with', 'by', 'is', 'desc', 'insert', 'execute', 'in', 'default',
+    'materialized', 'drop', 'batch', 'order', 'keyspace', 'token', 'limit', 'allow', 'of', 'norecursive', 'delete',
+    'where', 'or', 'unset', 'view'
+))
+
 
 class CqlParsingRuleSet(pylexotron.ParsingRuleSet):
 
@@ -54,20 +64,10 @@ class CqlParsingRuleSet(pylexotron.ParsingRuleSet):
 
     def set_reserved_keywords(self):
         """
-        We cannot let resreved cql keywords be simple 'identifier' since this caused
+        We cannot let reserved cql keywords be simple 'identifier' since this caused
         problems with completion, see CASSANDRA-10415
         """
-        # CASSANDRA-16659 - to keep things compact cql_keywords_reserved will not be imported from the drivers anymore
-        cql_keywords_reserved = set((
-            'authorize', 'rename', 'set', 'revoke', 'into', 'describe', 'primary', 'replace', 'columnfamily', 'apply',
-            'table', 'null', 'select', 'if', 'index', 'use', 'from', 'and', 'unlogged', 'create', 'nan', 'to', 'add',
-            'alter', 'schema', 'begin', 'full', 'infinity', 'grant', 'truncate', 'on', 'modify', 'mbeans', 'update',
-            'asc', 'mbean', 'entries', 'not', 'using', 'with', 'by', 'is', 'desc', 'insert', 'execute', 'in', 'default',
-            'materialized', 'drop', 'batch', 'order', 'keyspace', 'token', 'limit', 'allow', 'of', 'norecursive', 'delete',
-            'where', 'or', 'unset', 'view'
-        ))
-
-        syntax = '<reserved_identifier> ::= /(' + '|'.join(r'\b{}\b'.format(k) for k in cql_keywords_reserved) + ')/ ;'
+        syntax = '<reserved_identifier> ::= /(' + '|'.join(r'\b{}\b'.format(k) for k in cql_reserved_keywords) + ')/ ;'
         self.append_rules(syntax)
 
     def completer_for(self, rulename, symname):

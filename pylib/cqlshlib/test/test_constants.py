@@ -1,0 +1,44 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from os.path import join
+import re
+
+from .basecase import BaseTestCase, cassandra_dir
+from cqlshlib.cqlhandling import cql_reserved_keywords as cqlsh_reserved_keywords
+
+RESERVED_KEYWORDS_SOURCE = join(cassandra_dir, 'src', 'java', 'org', 'apache', 'cassandra', 'cql3', 'ReservedKeywords.java')
+
+
+class TestConstants(BaseTestCase):
+
+    def test_cql_reserved_keywords(self):
+        with open(RESERVED_KEYWORDS_SOURCE) as f:
+            text = f.read()
+
+        start = text.find('static final String[] reservedKeywords')
+        start = text.find('{', start)
+        end = text.find('}', start)
+
+        tokens = re.split('["|\\s|,]+', text[start+1:end-1])
+        source_reserved_keywords = set(t.lower() for t in tokens if t)
+
+        cqlsh_not_source = cqlsh_reserved_keywords - source_reserved_keywords
+        self.assertFalse(cqlsh_not_source, "Reserved keywords in cqlsh not read from source %s."
+                         % (RESERVED_KEYWORDS_SOURCE,))
+
+        source_not_cqlsh = source_reserved_keywords - cqlsh_reserved_keywords
+        self.assertFalse(source_not_cqlsh, "Reserved keywords in source %s not appearing in cqlsh.")
