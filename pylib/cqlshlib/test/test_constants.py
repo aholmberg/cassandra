@@ -41,4 +41,5 @@ class TestConstants(BaseTestCase):
                          % (RESERVED_KEYWORDS_SOURCE,))
 
         source_not_cqlsh = source_reserved_keywords - cqlsh_reserved_keywords
-        self.assertFalse(source_not_cqlsh, "Reserved keywords in source %s not appearing in cqlsh.")
+        self.assertFalse(source_not_cqlsh, "Reserved keywords in source %s not appearing in cqlsh."
+                         % (RESERVED_KEYWORDS_SOURCE,))
