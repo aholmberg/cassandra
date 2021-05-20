@@ -2540,16 +2540,16 @@ jobs:
         command: |
           if [ "$REPEATED_UTEST_CLASS" == "<nil>" ]; then
             echo "Repeated utest class name hasn't been defined, exiting without running any test"
-          elif [ "$REPEATED_UTEST_COUNT: 100
+          elif [ "$REPEATED_UTEST_COUNT" == "<nil>" ]; then
             echo "Repeated utest count hasn't been defined, exiting without running any test"
-          elif [ "$REPEATED_UTEST_COUNT: 100
+          elif [ "$REPEATED_UTEST_COUNT" -le 0 ]; then
             echo "Repeated utest count is lesser or equals than zero, exiting without running any test"
           else
 
             # Calculate the number of test iterations to be run by the current parallel runner.
             # Since we are running the same test multiple times there is no need to use `circleci tests split`.
-            count=$((REPEATED_UTEST_COUNT: 100
-            if (($CIRCLE_NODE_INDEX < (REPEATED_UTEST_COUNT: 100
+            count=$((REPEATED_UTEST_COUNT / CIRCLE_NODE_TOTAL))
+            if (($CIRCLE_NODE_INDEX < (REPEATED_UTEST_COUNT % CIRCLE_NODE_TOTAL))); then
               count=$((count+1))
             fi
 
