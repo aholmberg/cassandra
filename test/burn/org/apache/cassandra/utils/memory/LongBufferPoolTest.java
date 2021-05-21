@@ -280,6 +280,7 @@ public class LongBufferPoolTest
         for (int threadIdx = 0; threadIdx < threadCount; threadIdx++)
             testEnv.addCheckedFuture(startWorkerThread(bufferPool, testEnv, threadIdx));
 
+        int fails = 0;
         while (!testEnv.latch.await(20L, TimeUnit.SECONDS))
         {
             int stalledThreads = testEnv.countStalledThreads();
@@ -292,11 +293,21 @@ public class LongBufferPoolTest
                 for (AtomicBoolean freedMemory : testEnv.freedAllMemory)
                     allFreed = allFreed && freedMemory.getAndSet(false);
                 if (allFreed)
-                    debug.check();
+                {
+                    try
+                    {
+                        debug.check();
+                    } catch(AssertionError ae)
+                    {
+                        ++fails;
+                        logger.info("Failed {}\n{}", fails, ae);
+                    }
+                }
                 else
                     logger.info("All threads did not free all memory in this time slot - skipping buffer recycle check");
             }
         }
+        assertEquals(0, fails);
 
         for (SPSCQueue<BufferCheck> queue : testEnv.sharedRecycle)
         {
@@ -339,8 +350,10 @@ public class LongBufferPoolTest
 
             void testOne() throws Exception
             {
-                long currentTargetSize = (rand.nextInt(testEnv.poolSize / 1024) == 0 || !testEnv.freedAllMemory[threadIdx].get()) ? 0 : targetSize;
+                long currentTargetSize = rand.nextInt(testEnv.poolSize / 1024) == 0 ? 0 : targetSize;
                 int spinCount = 0;
+                if (Thread.currentThread().getId() == 21 && currentTargetSize == 0)
+                    logger.info("totalSize({}) currentTargetSize({}) freeingSize({})", totalSize, currentTargetSize, freeingSize);
                 while (totalSize > currentTargetSize - freeingSize)
                 {
                     // free buffers until we're below our target size
@@ -382,14 +395,13 @@ public class LongBufferPoolTest
                     }
                     else
                     {
-                        check.validate();
                         bufferPool.put(check.buffer);
                         totalSize -= size;
                     }
                 }
 
                 if (currentTargetSize == 0)
-                    testEnv.freedAllMemory[threadIdx].compareAndSet(false, true);
+                    testEnv.freedAllMemory[threadIdx].set(true);
 
                 // allocate a new buffer
                 size = (int) Math.max(1, AVG_BUFFER_SIZE + (STDEV_BUFFER_SIZE * rand.nextGaussian()));
