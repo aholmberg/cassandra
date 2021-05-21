@@ -103,7 +103,14 @@ public class LongBufferPoolTest
         public synchronized void check()
         {
             for (BufferPool.Chunk chunk : normalChunks)
+            {
+                if (recycleRound != DebugChunk.get(chunk).lastRecycled)
+                {
+                    long[] l = normalChunks.stream().mapToLong(c -> DebugChunk.get(c).lastRecycled).toArray();
+                    logger.info("recycle gen not equal: {}", l);
+                }
                 assertEquals(recycleRound, DebugChunk.get(chunk).lastRecycled);
+            }
             recycleRound++;
         }
     }
@@ -273,7 +280,7 @@ public class LongBufferPoolTest
         for (int threadIdx = 0; threadIdx < threadCount; threadIdx++)
             testEnv.addCheckedFuture(startWorkerThread(bufferPool, testEnv, threadIdx));
 
-        while (!testEnv.latch.await(10L, TimeUnit.SECONDS))
+        while (!testEnv.latch.await(20L, TimeUnit.SECONDS))
         {
             int stalledThreads = testEnv.countStalledThreads();
             int doneThreads = testEnv.countDoneThreads();
