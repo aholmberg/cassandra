@@ -110,8 +110,8 @@ public class LongBufferPoolTest
                     logger.info("recycle gen not equal: {}", l);
                     logger.info("### chunk: {}", chunk);
                     recycleRound++;
+                    assertEquals(recycleRound-1, DebugChunk.get(chunk).lastRecycled);
                 }
-                assertEquals(recycleRound, DebugChunk.get(chunk).lastRecycled);
             }
             recycleRound++;
         }
@@ -372,10 +372,7 @@ public class LongBufferPoolTest
                         else if (!recycleFromNeighbour())
                         {
                             if (++spinCount > 1000 && System.nanoTime() > until)
-                            {
-                                logger.info("### leaving loop");
                                 return;
-                            }
                             // otherwise, free one of our other neighbour's buffers if can; and otherwise yield
                             Thread.yield();
                         }

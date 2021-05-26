@@ -1177,13 +1177,14 @@ public class BufferPool
         void recycle()
         {
             assert freeSlots == 0L;
+            cycle = 6;
             recycler.recycle(this);
         }
 
         public void partiallyRecycle()
         {
             assert owner == null;
-            cycle = 6;
+            cycle = 7;
             recycler.recyclePartially(this);
         }
 
