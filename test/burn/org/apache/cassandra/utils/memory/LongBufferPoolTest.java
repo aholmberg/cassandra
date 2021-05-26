@@ -291,7 +291,7 @@ public class LongBufferPoolTest
             if (doneThreads == 0) // If any threads have completed, they will stop making progress/recycling buffers.
             {                     // Assertions failures on the threads will be caught below.
                 assertEquals(0, stalledThreads);
-                logger.info("### overflow stats: {}", bufferPool.overflowMemoryInBytes());
+//                logger.info("### overflow stats: {}", bufferPool.overflowMemoryInBytes());
                 boolean allFreed = testEnv.burnFreed.getAndSet(false);
                 for (AtomicBoolean freedMemory : testEnv.freedAllMemory)
                     allFreed = allFreed && freedMemory.getAndSet(false);
