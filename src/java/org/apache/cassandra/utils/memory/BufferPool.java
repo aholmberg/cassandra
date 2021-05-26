@@ -95,7 +95,7 @@ import static org.apache.cassandra.utils.memory.MemoryUtil.isExactlyDirect;
  *       <ul>
  *         <li>used to serve allocation size that is less than NORMAL_ALLOCATION_UNIT</li>
  *         <li>when there is insufficient space in the local queue, it will request parent normal pool for more tiny chunks</li>
- *         <li>when tiny chunk is fully freed, it will be passed to paretn normal pool and corresponding buffer in the parent normal chunk is freed</li>
+ *         <li>when tiny chunk is fully freed, it will be passed to parent normal pool and corresponding buffer in the parent normal chunk is freed</li>
  *       </ul>
  *     </li>
  * </ul>
@@ -221,9 +221,14 @@ public class BufferPool
     public void put(ByteBuffer buffer)
     {
         if (isExactlyDirect(buffer))
+        {
             localPool.get().put(buffer);
+        }
         else
+        {
+            logger.info("###### overflow");
             updateOverflowMemoryUsage(-buffer.capacity());
+        }
     }
 
     public void putUnusedPortion(ByteBuffer buffer)
@@ -1147,8 +1152,11 @@ public class BufferPool
         void tryRecycle()
         {
             assert owner == null;
-            if (isFree() && freeSlotsUpdater.compareAndSet(this, -1L, 0L))
-                recycle();
+            if (isFree())
+                if (freeSlotsUpdater.compareAndSet(this, -1L, 0L))
+                    recycle();
+                else
+                    logger.info("### tried but did not recycle: {}", this);
         }
 
         void recycle()
