@@ -1100,6 +1100,8 @@ public class BufferPool
         private static final AtomicReferenceFieldUpdater<Chunk, Status> statusUpdater =
                 AtomicReferenceFieldUpdater.newUpdater(Chunk.class, Status.class, "status");
         private volatile Status status = Status.IN_USE;
+        private int lastZeroed = 0;
+        private int cycle = 0;
 
         @VisibleForTesting
         Object debugAttachment;
@@ -1126,6 +1128,8 @@ public class BufferPool
             this.shift = 31 & (Integer.numberOfTrailingZeros(slab.capacity() / 64));
             // -1 means all free whilst 0 means all in use
             this.freeSlots = slab.capacity() == 0 ? 0L : -1L;
+            if (freeSlots == 0)
+                lastZeroed = 1;
         }
 
         /**
@@ -1136,6 +1140,7 @@ public class BufferPool
         {
             assert this.owner == null;
             this.owner = owner;
+            cycle = 1;
         }
 
         /**
@@ -1152,11 +1157,21 @@ public class BufferPool
         void tryRecycle()
         {
             assert owner == null;
+            cycle = 2;
             if (isFree())
                 if (freeSlotsUpdater.compareAndSet(this, -1L, 0L))
+                {
+                    lastZeroed = 2;
                     recycle();
+                    cycle = 3;
+                }
                 else
+                {
                     logger.info("### tried but did not recycle: {}", this);
+                    cycle = 4;
+                }
+            else
+                cycle = 5;
         }
 
         void recycle()
@@ -1168,6 +1183,7 @@ public class BufferPool
         public void partiallyRecycle()
         {
             assert owner == null;
+            cycle = 6;
             recycler.recyclePartially(this);
         }
 
@@ -1289,6 +1305,7 @@ public class BufferPool
 
             // this loop is very unroll friendly, and would achieve high ILP, but not clear if the compiler will exploit this.
             // right now, not worth manually exploiting, but worth noting for future
+            long x;
             while (true)
             {
                 long cur = freeSlots;
@@ -1315,8 +1332,13 @@ public class BufferPool
                     while (true)
                     {
                         // clear the candidate bits (freeSlots &= ~candidate)
-                        if (freeSlotsUpdater.compareAndSet(this, cur, cur & ~candidate))
+                        x = cur & ~candidate;
+                        if (freeSlotsUpdater.compareAndSet(this, cur, x))
+                        {
+                            if (0 == x)
+                                lastZeroed = 3;
                             break;
+                        }
 
                         cur = freeSlots;
                         // make sure no other thread has cleared the candidate bits
@@ -1374,7 +1396,10 @@ public class BufferPool
                 if (tryRelease && (next == -1L))
                     next = 0L;
                 if (freeSlotsUpdater.compareAndSet(this, cur, next))
+                {
+                    lastZeroed = 4;
                     return next;
+                }
             }
         }
 
@@ -1402,7 +1427,10 @@ public class BufferPool
                 next = cur | shiftedSlotBits;
                 assert next == (cur ^ shiftedSlotBits); // ensure no double free
                 if (freeSlotsUpdater.compareAndSet(this, cur, next))
+                {
+                    lastZeroed = 5;
                     break;
+                }
             }
             MemoryUtil.setByteBufferCapacity(buffer, size);
         }
@@ -1410,7 +1438,9 @@ public class BufferPool
         @Override
         public String toString()
         {
-            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d]", slab, Long.toBinaryString(freeSlots), capacity(), free());
+            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d, status %s, owner %s, lastZeroed %d, cycle %d]",
+                                 slab, Long.toBinaryString(freeSlots), capacity(), free(), status(), owner(), lastZeroed,
+                                 cycle);
         }
 
         @VisibleForTesting
@@ -1436,6 +1466,7 @@ public class BufferPool
                 chunk.owner = null;
                 chunk.freeSlots = 0L;
                 chunk.recycle();
+                logger.info("### unsafeRecycle");
             }
         }
 
