@@ -164,7 +164,7 @@ public class LongBufferPoolTest
         {
             ByteBuffer read = buffer.duplicate();
             while (read.remaining() > 8)
-                assert read.getLong() == val;
+                assertEquals(val, read.getLong());
         }
 
         void init()
@@ -290,7 +290,7 @@ public class LongBufferPoolTest
 
             if (doneThreads == 0) // If any threads have completed, they will stop making progress/recycling buffers.
             {                     // Assertions failures on the threads will be caught below.
-                assert stalledThreads == 0;
+                assertEquals(0, stalledThreads);
                 logger.info("### overflow stats: {}", bufferPool.overflowMemoryInBytes());
                 boolean allFreed = testEnv.burnFreed.getAndSet(false);
                 for (AtomicBoolean freedMemory : testEnv.freedAllMemory)
@@ -372,7 +372,10 @@ public class LongBufferPoolTest
                         else if (!recycleFromNeighbour())
                         {
                             if (++spinCount > 1000 && System.nanoTime() > until)
+                            {
+                                logger.info("### leaving loop");
                                 return;
+                            }
                             // otherwise, free one of our other neighbour's buffers if can; and otherwise yield
                             Thread.yield();
                         }
