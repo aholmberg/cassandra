@@ -108,6 +108,8 @@ public class LongBufferPoolTest
                 {
                     long[] l = normalChunks.stream().mapToLong(c -> DebugChunk.get(c).lastRecycled).toArray();
                     logger.info("recycle gen not equal: {}", l);
+                    logger.info("### chunk: {}", chunk);
+                    recycleRound++;
                 }
                 assertEquals(recycleRound, DebugChunk.get(chunk).lastRecycled);
             }
@@ -116,7 +118,7 @@ public class LongBufferPoolTest
     }
 
     @BeforeClass
-    public static void setup() throws Exception
+    public static void setup()
     {
         DatabaseDescriptor.daemonInitialization();
     }
@@ -289,6 +291,7 @@ public class LongBufferPoolTest
             if (doneThreads == 0) // If any threads have completed, they will stop making progress/recycling buffers.
             {                     // Assertions failures on the threads will be caught below.
                 assert stalledThreads == 0;
+                logger.info("### overflow stats: {}", bufferPool.overflowMemoryInBytes());
                 boolean allFreed = testEnv.burnFreed.getAndSet(false);
                 for (AtomicBoolean freedMemory : testEnv.freedAllMemory)
                     allFreed = allFreed && freedMemory.getAndSet(false);
@@ -300,7 +303,7 @@ public class LongBufferPoolTest
                     } catch(AssertionError ae)
                     {
                         ++fails;
-                        logger.info("Failed {}\n{}", fails, ae);
+                        logger.info("Failed {}", fails, ae);
                     }
                 }
                 else
