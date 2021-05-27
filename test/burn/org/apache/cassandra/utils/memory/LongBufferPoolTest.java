@@ -76,10 +76,13 @@ public class LongBufferPoolTest
         static class DebugChunk
         {
             volatile long lastRecycled;
+            final int idx;
+            DebugChunk(int idx)
+            {
+                this.idx = idx;
+            }
             static DebugChunk get(BufferPool.Chunk chunk)
             {
-                if (chunk.debugAttachment == null)
-                    chunk.debugAttachment = new DebugChunk();
                 return (DebugChunk) chunk.debugAttachment;
             }
         }
@@ -88,13 +91,15 @@ public class LongBufferPoolTest
 
         public synchronized void registerNormal(BufferPool.Chunk chunk)
         {
-            chunk.debugAttachment = new DebugChunk();
+            chunk.debugAttachment = new DebugChunk(normalChunks.size());
             normalChunks.add(chunk);
         }
         public void recycleNormal(BufferPool.Chunk oldVersion, BufferPool.Chunk newVersion)
         {
-            newVersion.debugAttachment = oldVersion.debugAttachment;
-            DebugChunk.get(oldVersion).lastRecycled = recycleRound;
+            DebugChunk c = (DebugChunk) oldVersion.debugAttachment;
+            newVersion.debugAttachment = c;
+            c.lastRecycled = recycleRound;
+            normalChunks.set(c.idx, newVersion);
         }
         public void recyclePartial(BufferPool.Chunk chunk)
         {
