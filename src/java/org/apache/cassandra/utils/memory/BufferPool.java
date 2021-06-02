@@ -796,6 +796,7 @@ public class BufferPool
             // * others:
             //          * for normal chunk:  partial recycle the chunk if it can be partially recycled but not yet recycled.
             //          * for tiny chunk: do nothing.
+            boolean ownerNull = chunk.owner == null;
             if (free == 0L)
             {
                 assert owner == this;
@@ -805,21 +806,31 @@ public class BufferPool
                 chunk.recycle();
                 chunk.freeResult = 1;
             }
-            else if (free == -1L && owner != this && chunk.owner == null && !chunk.recycler.canRecyclePartially())
+            else if (free == -1L &&
+                     chunk.owner == null &&
+                     !chunk.recycler.canRecyclePartially())
             {
                 // although we try to take recycle ownership cheaply, it is not always possible to do so if the owner is racing to unset.
                 // we must also check after completely freeing if the owner has since been unset, and try to recycle
                 chunk.tryRecycle();
                 chunk.freeResult = 2;
             }
-            else if (chunk.owner == null && chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
+            else if (ownerNull && chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
             {
                 // re-cirlate partially freed normal chunk to global list
                 chunk.partiallyRecycle();
                 chunk.freeResult = 3;
             }
             else
+            {
                 chunk.freeResult = 4;
+                chunk.ths = this;
+                chunk.owner_ = owner;
+                chunk.free = free;
+                chunk.ownerNull = ownerNull;
+                chunk.canRecyclePart = chunk.recycler.canRecyclePartially();
+            }
+
 
             if (owner == this)
             {
@@ -1107,6 +1118,11 @@ public class BufferPool
         private volatile Status status = Status.IN_USE;
         public int freeResult = 0;
         private int cycle = 0;
+        public Object ths;
+        public Object owner_;
+        public long free;
+        public boolean ownerNull;
+        public boolean canRecyclePart;
 //        public Throwable t;
 
         @VisibleForTesting
@@ -1433,9 +1449,8 @@ public class BufferPool
         @Override
         public String toString()
         {
-            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d, status %s, owner %s, freeResult %d, cycle %d]",
-                                 slab, Long.toBinaryString(freeSlots), capacity(), free(), status(), owner(), freeResult,
-                                 cycle);
+            return String.format("status %s, owner %s, freeResult %d, cycle %d ths %s, owner_ %s free %d ownerNull %s canRecyclePart %s",
+                                 status(), owner(), freeResult, cycle, ths, owner_, free, ownerNull, canRecyclePart);
         }
 
         @VisibleForTesting
