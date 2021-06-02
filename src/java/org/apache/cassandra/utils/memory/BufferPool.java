@@ -803,18 +803,23 @@ public class BufferPool
                 // We must remove the Chunk from our local queue
                 remove(chunk);
                 chunk.recycle();
+                chunk.freeResult = 1;
             }
             else if (free == -1L && owner != this && chunk.owner == null && !chunk.recycler.canRecyclePartially())
             {
                 // although we try to take recycle ownership cheaply, it is not always possible to do so if the owner is racing to unset.
                 // we must also check after completely freeing if the owner has since been unset, and try to recycle
                 chunk.tryRecycle();
+                chunk.freeResult = 2;
             }
             else if (chunk.owner == null && chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
             {
                 // re-cirlate partially freed normal chunk to global list
                 chunk.partiallyRecycle();
+                chunk.freeResult = 3;
             }
+            else
+                chunk.freeResult = 4;
 
             if (owner == this)
             {
@@ -1100,8 +1105,9 @@ public class BufferPool
         private static final AtomicReferenceFieldUpdater<Chunk, Status> statusUpdater =
                 AtomicReferenceFieldUpdater.newUpdater(Chunk.class, Status.class, "status");
         private volatile Status status = Status.IN_USE;
-        private int lastZeroed = 0;
+        public int freeResult = 0;
         private int cycle = 0;
+//        public Throwable t;
 
         @VisibleForTesting
         Object debugAttachment;
@@ -1114,6 +1120,7 @@ public class BufferPool
             this.shift = recycle.shift;
             this.freeSlots = -1L;
             this.recycler = recycle.recycler;
+            this.debugAttachment = recycle.debugAttachment;
         }
 
         Chunk(Recycler recycler, ByteBuffer slab)
@@ -1128,8 +1135,6 @@ public class BufferPool
             this.shift = 31 & (Integer.numberOfTrailingZeros(slab.capacity() / 64));
             // -1 means all free whilst 0 means all in use
             this.freeSlots = slab.capacity() == 0 ? 0L : -1L;
-            if (freeSlots == 0)
-                lastZeroed = 1;
         }
 
         /**
@@ -1161,7 +1166,6 @@ public class BufferPool
             if (isFree())
                 if (freeSlotsUpdater.compareAndSet(this, -1L, 0L))
                 {
-                    lastZeroed = 2;
                     recycle();
                     cycle = 3;
                 }
@@ -1335,11 +1339,7 @@ public class BufferPool
                         // clear the candidate bits (freeSlots &= ~candidate)
                         x = cur & ~candidate;
                         if (freeSlotsUpdater.compareAndSet(this, cur, x))
-                        {
-                            if (0 == x)
-                                lastZeroed = 3;
                             break;
-                        }
 
                         cur = freeSlots;
                         // make sure no other thread has cleared the candidate bits
@@ -1397,10 +1397,7 @@ public class BufferPool
                 if (tryRelease && (next == -1L))
                     next = 0L;
                 if (freeSlotsUpdater.compareAndSet(this, cur, next))
-                {
-                    lastZeroed = 4;
                     return next;
-                }
             }
         }
 
@@ -1428,10 +1425,7 @@ public class BufferPool
                 next = cur | shiftedSlotBits;
                 assert next == (cur ^ shiftedSlotBits); // ensure no double free
                 if (freeSlotsUpdater.compareAndSet(this, cur, next))
-                {
-                    lastZeroed = 5;
                     break;
-                }
             }
             MemoryUtil.setByteBufferCapacity(buffer, size);
         }
@@ -1439,8 +1433,8 @@ public class BufferPool
         @Override
         public String toString()
         {
-            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d, status %s, owner %s, lastZeroed %d, cycle %d]",
-                                 slab, Long.toBinaryString(freeSlots), capacity(), free(), status(), owner(), lastZeroed,
+            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d, status %s, owner %s, freeResult %d, cycle %d]",
+                                 slab, Long.toBinaryString(freeSlots), capacity(), free(), status(), owner(), freeResult,
                                  cycle);
         }
 
