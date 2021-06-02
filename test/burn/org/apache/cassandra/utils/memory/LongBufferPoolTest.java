@@ -360,8 +360,6 @@ public class LongBufferPoolTest
             {
                 long currentTargetSize = rand.nextInt(testEnv.poolSize / 1024) == 0 ? 0 : targetSize;
                 int spinCount = 0;
-                if (Thread.currentThread().getId() == 21 && currentTargetSize == 0)
-                    logger.info("totalSize({}) currentTargetSize({}) freeingSize({})", totalSize, currentTargetSize, freeingSize);
                 while (totalSize > currentTargetSize - freeingSize)
                 {
                     // free buffers until we're below our target size
