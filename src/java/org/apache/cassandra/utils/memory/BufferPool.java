@@ -986,7 +986,7 @@ public class BufferPool
                 if (tinyPool != null)
                     // releasing tiny chunks may result in releasing current evicted chunk
                     tinyPool.chunks.removeIf((child, parent) -> Chunk.getParentChunk(child.slab) == parent, evict);
-                evict.evict();
+                evict.releaseAndSetEvicted();
             }
         }
 
@@ -1161,7 +1161,7 @@ public class BufferPool
             cycle = 1;
         }
 
-        public synchronized void evict()
+        public synchronized void releaseAndSetEvicted()
         {
             release();
             setEvicted(Chunk.Status.IN_USE);
