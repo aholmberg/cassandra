@@ -806,16 +806,16 @@ public class BufferPool
                 chunk.recycle();
                 chunk.freeResult = 1;
             }
-            else if (chunk.owner == null)
+            else if (free == -1L && chunk.owner == null)
             {
-                if (free == -1L)
-                {
-                    chunk.tryRecycle();
-                    chunk.freeResult = 2;
-                }
-                else if (chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
+                if (chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
                 {
                     chunk.partiallyRecycle();
+                    chunk.freeResult = 2;
+                }
+                else
+                {
+                    chunk.tryRecycle();
                     chunk.freeResult = 3;
                 }
                 chunk.freeResult = 4;
@@ -986,9 +986,7 @@ public class BufferPool
                 if (tinyPool != null)
                     // releasing tiny chunks may result in releasing current evicted chunk
                     tinyPool.chunks.removeIf((child, parent) -> Chunk.getParentChunk(child.slab) == parent, evict);
-                evict.release();
-                // Mark it as evicted and will be eligible for partial recyle if recycler allows
-                evict.setEvicted(Chunk.Status.IN_USE);
+                evict.evict();
             }
         }
 
@@ -1161,6 +1159,12 @@ public class BufferPool
             assert this.owner == null;
             this.owner = owner;
             cycle = 1;
+        }
+
+        public synchronized void evict()
+        {
+            release();
+            setEvicted(Chunk.Status.IN_USE);
         }
 
         /**
