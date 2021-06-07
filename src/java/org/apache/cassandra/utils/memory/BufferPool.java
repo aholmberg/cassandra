@@ -95,7 +95,7 @@ import static org.apache.cassandra.utils.memory.MemoryUtil.isExactlyDirect;
  *       <ul>
  *         <li>used to serve allocation size that is less than NORMAL_ALLOCATION_UNIT</li>
  *         <li>when there is insufficient space in the local queue, it will request parent normal pool for more tiny chunks</li>
- *         <li>when tiny chunk is fully freed, it will be passed to paretn normal pool and corresponding buffer in the parent normal chunk is freed</li>
+ *         <li>when tiny chunk is fully freed, it will be passed to parent normal pool and corresponding buffer in the parent normal chunk is freed</li>
  *       </ul>
  *     </li>
  * </ul>
@@ -799,7 +799,7 @@ public class BufferPool
                 remove(chunk);
                 chunk.recycle();
             }
-            else if (free == -1L && owner != this && chunk.owner == null && !chunk.recycler.canRecyclePartially())
+            else if (free == -1L && chunk.owner == null && !chunk.recycler.canRecyclePartially())
             {
                 // although we try to take recycle ownership cheaply, it is not always possible to do so if the owner is racing to unset.
                 // we must also check after completely freeing if the owner has since been unset, and try to recycle
@@ -966,9 +966,7 @@ public class BufferPool
                 if (tinyPool != null)
                     // releasing tiny chunks may result in releasing current evicted chunk
                     tinyPool.chunks.removeIf((child, parent) -> Chunk.getParentChunk(child.slab) == parent, evict);
-                evict.release();
-                // Mark it as evicted and will be eligible for partial recyle if recycler allows
-                evict.setEvicted(Chunk.Status.IN_USE);
+                evict.releaseAndSetEvicted();
             }
         }
 
@@ -1149,6 +1147,12 @@ public class BufferPool
             assert owner == null;
             if (isFree() && freeSlotsUpdater.compareAndSet(this, -1L, 0L))
                 recycle();
+        }
+
+        synchronized void releaseAndSetEvicted()
+        {
+            release();
+            setEvicted(Status.IN_USE);
         }
 
         void recycle()
