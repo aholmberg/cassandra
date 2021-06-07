@@ -742,7 +742,6 @@ public class BufferPool
         {
             this.parent = () -> {
                 ByteBuffer buffer = parent.tryGetInternal(TINY_CHUNK_SIZE, false);
-                logger.info("### new unregistered chunk");
                 return buffer == null ? null : new Chunk(parent, buffer);
             };
             this.tinyLimit = 0; // we only currently permit one layer of nesting (which brings us down to 32 byte allocations, so is plenty)
@@ -819,11 +818,10 @@ public class BufferPool
                     chunk.tryRecycle();
                     chunk.freeResult = 3;
                 }
-                chunk.freeResult = 4;
             }
             else
             {
-                chunk.freeResult = 5;
+                chunk.freeResult = 4;
                 chunk.ths = this;
                 chunk.owner_ = owner;
                 chunk.free = free;

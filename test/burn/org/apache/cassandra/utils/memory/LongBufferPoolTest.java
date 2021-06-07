@@ -76,15 +76,10 @@ public class LongBufferPoolTest
         static class DebugChunk
         {
             volatile long lastRecycled;
-            final int idx;
-            DebugChunk(int idx)
-            {
-                this.idx = idx;
-            }
             static DebugChunk get(BufferPool.Chunk chunk)
             {
-//                if (chunk.debugAttachment == null)
-//                    chunk.debugAttachment = new DebugChunk();
+                if (chunk.debugAttachment == null)
+                    chunk.debugAttachment = new DebugChunk();
                 return (DebugChunk) chunk.debugAttachment;
             }
         }
@@ -93,7 +88,7 @@ public class LongBufferPoolTest
 
         public synchronized void registerNormal(BufferPool.Chunk chunk)
         {
-            chunk.debugAttachment = new DebugChunk(normalChunks.size());
+            chunk.debugAttachment = new DebugChunk();
             normalChunks.add(chunk);
         }
         public void recycleNormal(BufferPool.Chunk oldVersion, BufferPool.Chunk newVersion)
@@ -101,7 +96,6 @@ public class LongBufferPoolTest
             DebugChunk c = DebugChunk.get(oldVersion);;
             newVersion.debugAttachment = c;
             c.lastRecycled = recycleRound;
-            normalChunks.set(c.idx, newVersion);
         }
         public void recyclePartial(BufferPool.Chunk chunk)
         {
@@ -298,7 +292,6 @@ public class LongBufferPoolTest
             if (doneThreads == 0) // If any threads have completed, they will stop making progress/recycling buffers.
             {                     // Assertions failures on the threads will be caught below.
                 assertEquals(0, stalledThreads);
-//                logger.info("### overflow stats: {}", bufferPool.overflowMemoryInBytes());
                 boolean allFreed = testEnv.burnFreed.getAndSet(false);
                 for (AtomicBoolean freedMemory : testEnv.freedAllMemory)
                     allFreed = allFreed && freedMemory.getAndSet(false);
