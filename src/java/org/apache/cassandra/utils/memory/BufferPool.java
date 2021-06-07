@@ -95,7 +95,7 @@ import static org.apache.cassandra.utils.memory.MemoryUtil.isExactlyDirect;
  *       <ul>
  *         <li>used to serve allocation size that is less than NORMAL_ALLOCATION_UNIT</li>
  *         <li>when there is insufficient space in the local queue, it will request parent normal pool for more tiny chunks</li>
- *         <li>when tiny chunk is fully freed, it will be passed to paretn normal pool and corresponding buffer in the parent normal chunk is freed</li>
+ *         <li>when tiny chunk is fully freed, it will be passed to parent normal pool and corresponding buffer in the parent normal chunk is freed</li>
  *       </ul>
  *     </li>
  * </ul>
@@ -221,9 +221,14 @@ public class BufferPool
     public void put(ByteBuffer buffer)
     {
         if (isExactlyDirect(buffer))
+        {
             localPool.get().put(buffer);
+        }
         else
+        {
+            logger.info("###### overflow");
             updateOverflowMemoryUsage(-buffer.capacity());
+        }
     }
 
     public void putUnusedPortion(ByteBuffer buffer)
@@ -791,6 +796,7 @@ public class BufferPool
             // * others:
             //          * for normal chunk:  partial recycle the chunk if it can be partially recycled but not yet recycled.
             //          * for tiny chunk: do nothing.
+            boolean ownerNull = chunk.owner == null;
             if (free == 0L)
             {
                 assert owner == this;
@@ -798,18 +804,31 @@ public class BufferPool
                 // We must remove the Chunk from our local queue
                 remove(chunk);
                 chunk.recycle();
+                chunk.freeResult = 1;
             }
-            else if (free == -1L && owner != this && chunk.owner == null && !chunk.recycler.canRecyclePartially())
+            else if (free == -1L && chunk.owner == null)
             {
-                // although we try to take recycle ownership cheaply, it is not always possible to do so if the owner is racing to unset.
-                // we must also check after completely freeing if the owner has since been unset, and try to recycle
-                chunk.tryRecycle();
+                if (chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
+                {
+                    chunk.partiallyRecycle();
+                    chunk.freeResult = 2;
+                }
+                else
+                {
+                    chunk.tryRecycle();
+                    chunk.freeResult = 3;
+                }
             }
-            else if (chunk.owner == null && chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
+            else
             {
-                // re-cirlate partially freed normal chunk to global list
-                chunk.partiallyRecycle();
+                chunk.freeResult = 4;
+                chunk.ths = this;
+                chunk.owner_ = owner;
+                chunk.free = free;
+                chunk.ownerNull = ownerNull;
+                chunk.canRecyclePart = chunk.recycler.canRecyclePartially();
             }
+
 
             if (owner == this)
             {
@@ -966,9 +985,7 @@ public class BufferPool
                 if (tinyPool != null)
                     // releasing tiny chunks may result in releasing current evicted chunk
                     tinyPool.chunks.removeIf((child, parent) -> Chunk.getParentChunk(child.slab) == parent, evict);
-                evict.release();
-                // Mark it as evicted and will be eligible for partial recyle if recycler allows
-                evict.setEvicted(Chunk.Status.IN_USE);
+                evict.releaseAndSetEvicted();
             }
         }
 
@@ -1095,6 +1112,14 @@ public class BufferPool
         private static final AtomicReferenceFieldUpdater<Chunk, Status> statusUpdater =
                 AtomicReferenceFieldUpdater.newUpdater(Chunk.class, Status.class, "status");
         private volatile Status status = Status.IN_USE;
+        public int freeResult = 0;
+        private int cycle = 0;
+        public Object ths;
+        public Object owner_;
+        public long free;
+        public boolean ownerNull;
+        public boolean canRecyclePart;
+//        public Throwable t;
 
         @VisibleForTesting
         Object debugAttachment;
@@ -1107,6 +1132,7 @@ public class BufferPool
             this.shift = recycle.shift;
             this.freeSlots = -1L;
             this.recycler = recycle.recycler;
+            this.debugAttachment = recycle.debugAttachment;
         }
 
         Chunk(Recycler recycler, ByteBuffer slab)
@@ -1131,6 +1157,13 @@ public class BufferPool
         {
             assert this.owner == null;
             this.owner = owner;
+            cycle = 1;
+        }
+
+        public synchronized void releaseAndSetEvicted()
+        {
+            release();
+            setEvicted(Chunk.Status.IN_USE);
         }
 
         /**
@@ -1147,19 +1180,33 @@ public class BufferPool
         void tryRecycle()
         {
             assert owner == null;
-            if (isFree() && freeSlotsUpdater.compareAndSet(this, -1L, 0L))
-                recycle();
+            cycle = 2;
+            if (isFree())
+                if (freeSlotsUpdater.compareAndSet(this, -1L, 0L))
+                {
+                    recycle();
+                    cycle = 3;
+                }
+                else
+                {
+                    logger.info("### tried but did not recycle: {}", this);
+                    cycle = 4;
+                }
+            else
+                cycle = 5;
         }
 
         void recycle()
         {
             assert freeSlots == 0L;
+            cycle = 6;
             recycler.recycle(this);
         }
 
         public void partiallyRecycle()
         {
             assert owner == null;
+            cycle = 7;
             recycler.recyclePartially(this);
         }
 
@@ -1281,6 +1328,7 @@ public class BufferPool
 
             // this loop is very unroll friendly, and would achieve high ILP, but not clear if the compiler will exploit this.
             // right now, not worth manually exploiting, but worth noting for future
+            long x;
             while (true)
             {
                 long cur = freeSlots;
@@ -1307,7 +1355,8 @@ public class BufferPool
                     while (true)
                     {
                         // clear the candidate bits (freeSlots &= ~candidate)
-                        if (freeSlotsUpdater.compareAndSet(this, cur, cur & ~candidate))
+                        x = cur & ~candidate;
+                        if (freeSlotsUpdater.compareAndSet(this, cur, x))
                             break;
 
                         cur = freeSlots;
@@ -1402,7 +1451,8 @@ public class BufferPool
         @Override
         public String toString()
         {
-            return String.format("[slab %s, slots bitmap %s, capacity %d, free %d]", slab, Long.toBinaryString(freeSlots), capacity(), free());
+            return String.format("status %s, owner %s, freeResult %d, cycle %d ths %s, owner_ %s free %d ownerNull %s canRecyclePart %s",
+                                 status(), owner(), freeResult, cycle, ths, owner_, free, ownerNull, canRecyclePart);
         }
 
         @VisibleForTesting
@@ -1428,6 +1478,7 @@ public class BufferPool
                 chunk.owner = null;
                 chunk.freeSlots = 0L;
                 chunk.recycle();
+                logger.info("### unsafeRecycle");
             }
         }
 
