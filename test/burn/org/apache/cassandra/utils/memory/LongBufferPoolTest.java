@@ -83,6 +83,8 @@ public class LongBufferPoolTest
             }
             static DebugChunk get(BufferPool.Chunk chunk)
             {
+//                if (chunk.debugAttachment == null)
+//                    chunk.debugAttachment = new DebugChunk();
                 return (DebugChunk) chunk.debugAttachment;
             }
         }
@@ -96,7 +98,7 @@ public class LongBufferPoolTest
         }
         public void recycleNormal(BufferPool.Chunk oldVersion, BufferPool.Chunk newVersion)
         {
-            DebugChunk c = (DebugChunk) oldVersion.debugAttachment;
+            DebugChunk c = DebugChunk.get(oldVersion);;
             newVersion.debugAttachment = c;
             c.lastRecycled = recycleRound;
             normalChunks.set(c.idx, newVersion);
