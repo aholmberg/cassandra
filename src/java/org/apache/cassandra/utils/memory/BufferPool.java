@@ -806,18 +806,18 @@ public class BufferPool
                 chunk.recycle();
                 chunk.freeResult = 1;
             }
-            else if (free == -1L && chunk.owner == null)
+            else if (free == -1L && chunk.owner == null && !chunk.recycler.canRecyclePartially())
             {
-                if (chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
-                {
-                    chunk.partiallyRecycle();
-                    chunk.freeResult = 2;
-                }
-                else
-                {
-                    chunk.tryRecycle();
-                    chunk.freeResult = 3;
-                }
+                // although we try to take recycle ownership cheaply, it is not always possible to do so if the owner is racing to unset.
+                // we must also check after completely freeing if the owner has since been unset, and try to recycle
+                chunk.tryRecycle();
+                chunk.freeResult = 2;
+            }
+            else if (chunk.owner == null && chunk.recycler.canRecyclePartially() && chunk.setInUse(Chunk.Status.EVICTED))
+            {
+                // re-cirlate partially freed normal chunk to global list
+                chunk.partiallyRecycle();
+                chunk.freeResult = 3;
             }
             else
             {
