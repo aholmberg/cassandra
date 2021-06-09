@@ -121,11 +121,11 @@ public class LongBufferPoolTest
         BufferPools.forNetworking().unsafeReset();
     }
 
-    @Test
-    public void testPoolAllocateWithRecyclePartially() throws InterruptedException, ExecutionException
-    {
-        testPoolAllocate(true);
-    }
+//    @Test
+//    public void testPoolAllocateWithRecyclePartially() throws InterruptedException, ExecutionException
+//    {
+//        testPoolAllocate(true);
+//    }
 
     @Test
     public void testPoolAllocateWithoutRecyclePartially() throws InterruptedException, ExecutionException
