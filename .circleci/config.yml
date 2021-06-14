@@ -1504,7 +1504,7 @@ jobs:
     - DTEST_BRANCH: trunk
     - CCM_MAX_HEAP_SIZE: 2048M
     - CCM_HEAP_NEWSIZE: 512M
-    - REPEATED_UTEST_TARGET: long-testsome
+    - REPEATED_UTEST_TARGET: burn-testsome
     - REPEATED_UTEST_CLASS: org.apache.cassandra.utils.memory.LongBufferPoolTest
     - REPEATED_UTEST_METHODS: null
     - REPEATED_UTEST_COUNT: 100
