@@ -1122,7 +1122,7 @@ public class BufferPool
 //        public Throwable t;
 
         @VisibleForTesting
-        Object debugAttachment;
+        volatile Object debugAttachment;
 
         Chunk(Chunk recycle)
         {

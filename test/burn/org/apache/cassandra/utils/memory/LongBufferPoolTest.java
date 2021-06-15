@@ -76,10 +76,13 @@ public class LongBufferPoolTest
         static class DebugChunk
         {
             volatile long lastRecycled;
+            int idx;
+            DebugChunk(int i)
+            {
+                idx = i;
+            }
             static DebugChunk get(BufferPool.Chunk chunk)
             {
-                if (chunk.debugAttachment == null)
-                    chunk.debugAttachment = new DebugChunk();
                 return (DebugChunk) chunk.debugAttachment;
             }
         }
@@ -88,18 +91,27 @@ public class LongBufferPoolTest
 
         public synchronized void registerNormal(BufferPool.Chunk chunk)
         {
-            chunk.debugAttachment = new DebugChunk();
+            chunk.debugAttachment = new DebugChunk(normalChunks.size());
             normalChunks.add(chunk);
         }
         public void recycleNormal(BufferPool.Chunk oldVersion, BufferPool.Chunk newVersion)
         {
-            DebugChunk c = DebugChunk.get(oldVersion);;
-            newVersion.debugAttachment = c;
-            c.lastRecycled = recycleRound;
+            DebugChunk c = (DebugChunk) newVersion.debugAttachment;
+            if (c != null)
+            {
+                c.lastRecycled = recycleRound;
+                normalChunks.set(c.idx, newVersion);
+            }
+            else
+                logger.info("### part null");
         }
         public void recyclePartial(BufferPool.Chunk chunk)
         {
-            DebugChunk.get(chunk).lastRecycled = recycleRound;
+            DebugChunk c = (DebugChunk) chunk.debugAttachment;
+            if (c != null)
+                c.lastRecycled = recycleRound;
+            else
+                logger.info("### part null");
         }
         public synchronized void check()
         {
@@ -131,17 +143,17 @@ public class LongBufferPoolTest
         BufferPools.forNetworking().unsafeReset();
     }
 
-    @Test
-    public void testPoolAllocateWithRecyclePartially() throws InterruptedException, ExecutionException
-    {
-        testPoolAllocate(true);
-    }
-
 //    @Test
-//    public void testPoolAllocateWithoutRecyclePartially() throws InterruptedException, ExecutionException
+//    public void testPoolAllocateWithRecyclePartially() throws InterruptedException, ExecutionException
 //    {
-//        testPoolAllocate(false);
+//        testPoolAllocate(true);
 //    }
+
+    @Test
+    public void testPoolAllocateWithoutRecyclePartially() throws InterruptedException, ExecutionException
+    {
+        testPoolAllocate(false);
+    }
 
     private void testPoolAllocate(boolean recyclePartially) throws InterruptedException, ExecutionException
     {
