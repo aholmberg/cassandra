@@ -127,11 +127,11 @@ public class LongBufferPoolTest
         testPoolAllocate(true);
     }
 
-    @Test
-    public void testPoolAllocateWithoutRecyclePartially() throws InterruptedException, ExecutionException
-    {
-        testPoolAllocate(false);
-    }
+//    @Test
+//    public void testPoolAllocateWithoutRecyclePartially() throws InterruptedException, ExecutionException
+//    {
+//        testPoolAllocate(false);
+//    }
 
     private void testPoolAllocate(boolean recyclePartially) throws InterruptedException, ExecutionException
     {
