@@ -102,16 +102,12 @@ public class LongBufferPoolTest
                 c.lastRecycled = recycleRound;
                 normalChunks.set(c.idx, newVersion);
             }
-            else
-                logger.info("### part null");
         }
         public void recyclePartial(BufferPool.Chunk chunk)
         {
             DebugChunk c = (DebugChunk) chunk.debugAttachment;
             if (c != null)
                 c.lastRecycled = recycleRound;
-            else
-                logger.info("### part null");
         }
         public synchronized void check()
         {
