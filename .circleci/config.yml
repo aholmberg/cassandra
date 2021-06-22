@@ -620,8 +620,7 @@ jobs:
     - REPEATED_DTEST_VNODES: false
     - REPEATED_DTEST_COUNT: 100
     - REPEATED_DTEST_STOP_ON_FAILURE: false
-    - REPEATED_UPGRADE_DTEST_NAME: upgrade_tests/cql_tests.py::TestCQLNodes2RF1_Upgrade_indev_3_0_x_To_indev_4_0_x::test_static_columns
-    - RUN_STATIC_UPGRADE_MATRIX: true
+    - REPEATED_UPGRADE_DTEST_NAME: upgrade_tests/cql_tests.py
     - REPEATED_UPGRADE_DTEST_COUNT: 100
     - REPEATED_UPGRADE_DTEST_STOP_ON_FAILURE: false
     - REPEATED_JVM_UPGRADE_DTEST_CLASS: null
